@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { supabase } from '../../../lib/supabase.js'
-import { pdfToImages } from '../../../lib/pdf.js'
+import { pdfToImages, extractTextPositions, computeBboxesFromTextLayer, findBboxOnPage } from '../../../lib/pdf.js'
 import { cropByBbox, cropByPosition } from '../../../lib/crop.js'
 import { analyzeExam } from '../../../lib/ai.js'
 import QuestionCard from './QuestionCard.jsx'
@@ -36,6 +36,8 @@ export default function NewExam() {
   const [working, setWorking] = useState(false)
   const [workingMsg, setWorkingMsg] = useState('')
   const [error, setError] = useState(null)
+  const [textLayerBboxMap, setTextLayerBboxMap] = useState(null)
+  const [textLayerPositions, setTextLayerPositions] = useState([])
 
   // crop 결과 캐시
   const cropCacheRef = useRef(new Map())
@@ -74,12 +76,28 @@ export default function NewExam() {
     try {
       const ex = await pdfToImages(examFile)
       const ans = answerFile ? await pdfToImages(answerFile) : []
+
+      // 텍스트 레이어에서 문항 번호 위치 감지
+      let bboxMap = null
+      try {
+        setWorkingMsg('문항 번호 위치를 감지하는 중…')
+        const positions = await extractTextPositions(examFile)
+        setTextLayerPositions(positions)
+        if (positions.length > 0) {
+          bboxMap = computeBboxesFromTextLayer(positions)
+          console.log('[textLayer] 감지된 문항:', [...bboxMap.keys()])
+        }
+      } catch (e) {
+        console.warn('텍스트 레이어 추출 실패 (스캔본일 수 있음):', e)
+      }
+      setTextLayerBboxMap(bboxMap)
+
       setExamImages(ex)
       setAnswerImages(ans)
       cropCacheRef.current = new Map()
       setStep(2)
       // step 2 에서 바로 AI 분석 실행
-      await runAnalysis(ex, ans)
+      await runAnalysis(ex, ans, bboxMap)
     } catch (e) {
       setError(e.message || String(e))
     } finally {
@@ -88,7 +106,7 @@ export default function NewExam() {
     }
   }
 
-  const runAnalysis = async (exImgs = examImages, ansImgs = answerImages) => {
+  const runAnalysis = async (exImgs = examImages, ansImgs = answerImages, tlBboxMap = textLayerBboxMap) => {
     if (!teacher?.api_key_encrypted || !teacher?.provider) {
       setError('설정에서 AI 공급자와 API 키를 먼저 저장해주세요.')
       return
@@ -104,44 +122,56 @@ export default function NewExam() {
         answerImages: ansImgs,
       })
       const normalized = arr.map((q, i) => {
-        // bbox 유효성 검사: x, y, w, h 가 모두 유한 숫자면 사용
-        const rawBbox = q.bbox
-        const bbox =
-          rawBbox &&
-          Number.isFinite(rawBbox.x) &&
-          Number.isFinite(rawBbox.y) &&
-          Number.isFinite(rawBbox.w) &&
-          Number.isFinite(rawBbox.h) &&
-          rawBbox.w > 0 &&
-          rawBbox.h > 0
-            ? {
-                x: rawBbox.x,
-                y: rawBbox.y,
-                // 전체 너비(>65%)면 중심점 기준 50% 컬럼으로 축소
-                w: rawBbox.w > 65 ? 50 : rawBbox.w,
-                h: rawBbox.h,
-              }
-            : null
-        // 축소된 bbox의 x를 중심점 기준 왼쪽/오른쪽 배치
-        if (bbox && rawBbox.w > 65) {
-          const center = rawBbox.x + rawBbox.w / 2
-          bbox.x = center >= 50 ? 50 : 0
+        const qNumber = Number.isFinite(q.number) ? q.number : i + 1
+
+        // 1순위: 텍스트 레이어 bbox (PDF 좌표 기반, 가장 정확)
+        const tlBbox = tlBboxMap?.get(qNumber)
+        let bbox = null
+        let page = Math.min(Math.max(parseInt(q.page, 10) || 1, 1), exImgs.length || 1)
+
+        if (tlBbox) {
+          bbox = { x: tlBbox.x, y: tlBbox.y, w: tlBbox.w, h: tlBbox.h }
+          page = tlBbox.page
+        } else {
+          // 2순위: AI bbox
+          const rawBbox = q.bbox
+          bbox =
+            rawBbox &&
+            Number.isFinite(rawBbox.x) &&
+            Number.isFinite(rawBbox.y) &&
+            Number.isFinite(rawBbox.w) &&
+            Number.isFinite(rawBbox.h) &&
+            rawBbox.w > 0 &&
+            rawBbox.h > 0
+              ? {
+                  x: rawBbox.x,
+                  y: rawBbox.y,
+                  w: rawBbox.w > 65 ? 50 : rawBbox.w,
+                  h: rawBbox.h,
+                }
+              : null
+          if (bbox && rawBbox.w > 65) {
+            const center = rawBbox.x + rawBbox.w / 2
+            bbox.x = center >= 50 ? 50 : 0
+          }
         }
+
         return {
           id: `q-${i}-${Math.random().toString(36).slice(2, 8)}`,
-          number: Number.isFinite(q.number) ? q.number : i + 1,
+          number: qNumber,
           text: q.text ?? '',
           type: ['multiple_choice', 'short_answer', 'essay'].includes(q.type)
             ? q.type
             : 'short_answer',
           options: Array.isArray(q.options) ? q.options : [],
           correct_answer: q.correct_answer ?? '',
-          points: Number.isFinite(q.points) ? q.points : 5,
-          page: Math.min(Math.max(parseInt(q.page, 10) || 1, 1), exImgs.length || 1),
+          points: 0, // 저장 시 100 ÷ 문항수로 자동 계산
+          page,
           position: ['top', 'middle', 'bottom'].includes(q.position)
             ? q.position
             : 'middle',
           bbox,
+          sub_count: Number.isFinite(q.sub_count) && q.sub_count > 1 ? q.sub_count : 1,
           learning_objective: q.learning_objective ?? '',
           expanded: false,
         }
@@ -167,10 +197,11 @@ export default function NewExam() {
         type: 'short_answer',
         options: [],
         correct_answer: '',
-        points: 5,
+        points: 0,
         page: 1,
         position: 'middle',
         bbox: null,
+        sub_count: 1,
         learning_objective: '',
         expanded: true,
       },
@@ -226,6 +257,9 @@ export default function NewExam() {
       if (e1) throw new Error(`[1/3 exams insert] ${e1.message}`)
       createdExamId = exam.id
 
+      // 배점 자동 계산: 총점 100점 ÷ 문항 수
+      const pointsPerQ = Math.floor(100 / sortedQuestions.length)
+
       for (const q of sortedQuestions) {
         setWorkingMsg(`저장 중… (${q.number}번 이미지 업로드)`)
         const crop = await getCrop(q.page, q.position, q.bbox)
@@ -264,12 +298,13 @@ export default function NewExam() {
           type: q.type,
           options: q.options,
           correct_answer: q.correct_answer,
-          points: q.points,
+          points: pointsPerQ,
           image_url: pub.publicUrl,
           learning_objective: q.learning_objective,
           page: q.page,
           position: q.position,
           bbox: q.bbox,
+          sub_count: q.sub_count ?? 1,
         })
         if (e3) throw new Error(`[3/3 questions insert q${q.number}] ${e3.message}`)
       }
@@ -417,9 +452,10 @@ export default function NewExam() {
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-700">
               총 <span className="font-bold text-teacher">{questions.length}</span>문항
-              · 만점{' '}
+              · 만점 <span className="font-bold">100</span>점
+              · 문항당{' '}
               <span className="font-bold">
-                {questions.reduce((s, q) => s + (q.points || 0), 0)}
+                {questions.length > 0 ? Math.floor(100 / questions.length) : 0}
               </span>
               점
             </p>
@@ -446,6 +482,8 @@ export default function NewExam() {
                 pageTotal={pageTotal}
                 pageCount={Math.max(examImages.length, 1)}
                 examImages={examImages}
+                textLayerBboxMap={textLayerBboxMap}
+                textLayerPositions={textLayerPositions}
                 onChange={(next) => updateQuestion(q.id, next)}
                 onDelete={() => deleteQuestion(q.id)}
               />

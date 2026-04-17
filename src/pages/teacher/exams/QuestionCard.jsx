@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import BboxEditor from './BboxEditor.jsx'
+import { findBboxOnPage } from '../../../lib/pdf.js'
 
 const TYPE_LABEL = {
   multiple_choice: '객관식',
@@ -48,9 +49,9 @@ function isValidBbox(b) {
   )
 }
 
-export default function QuestionCard({ q, onChange, onDelete, examImages, pageCount, pageIdx, pageTotal }) {
+export default function QuestionCard({ q, onChange, onDelete, examImages, pageCount, pageIdx, pageTotal, textLayerBboxMap, textLayerPositions }) {
   const update = (patch) => onChange({ ...q, ...patch })
-  const [aiToast, setAiToast] = useState(false)
+  const [toastMsg, setToastMsg] = useState('')
 
   const pageImg = examImages?.find((p) => p.page === q.page)
 
@@ -72,7 +73,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
             {q.number}
           </span>
           <span className="text-sm text-gray-500 truncate">
-            {TYPE_LABEL[q.type]} · {q.points}점 · p.{q.page}
+            {TYPE_LABEL[q.type]} · p.{q.page}
           </span>
         </div>
         <span className="text-gray-400 text-xs shrink-0">{q.expanded ? '▲' : '▼'}</span>
@@ -96,17 +97,34 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
             <button
               type="button"
               onClick={() => {
-                setAiToast(true)
-                setTimeout(() => setAiToast(false), 2000)
+                setToastMsg('')
+                // 현재 선택된 페이지에서 이 번호 탐색
+                const onPage = findBboxOnPage(textLayerPositions || [], q.number, q.page)
+                if (onPage) {
+                  update({ bbox: { x: onPage.x, y: onPage.y, w: onPage.w, h: onPage.h } })
+                  return
+                }
+                // 현재 페이지에서 못 찾음 → 다른 페이지 정보만 안내 (페이지 변경 안 함)
+                const tlBbox = textLayerBboxMap?.get(q.number)
+                let msg
+                if (tlBbox) {
+                  msg = `현재 페이지에서 ${q.number}번을 찾지 못했습니다. (p.${tlBbox.page}에서 감지됨)`
+                } else if (textLayerBboxMap?.size > 0) {
+                  msg = `${q.number}번 문항을 PDF에서 찾지 못했습니다.`
+                } else {
+                  msg = '이 PDF는 스캔본이라 자동 배치를 지원하지 않습니다.'
+                }
+                setToastMsg(msg)
+                setTimeout(() => setToastMsg(''), 3000)
               }}
               className="px-2.5 py-1 rounded border border-gray-300 text-gray-500 hover:border-teacher hover:text-teacher"
             >
-              AI 자동 배치
+              자동 배치
             </button>
           </div>
-          {aiToast && (
-            <p className="text-xs text-teacher bg-teacher/10 rounded-lg py-1.5 px-3 text-center">
-              추후 업그레이드 예정입니다.
+          {toastMsg && (
+            <p className="text-xs text-amber-600 bg-amber-50 rounded-lg py-1.5 px-3 text-center">
+              {toastMsg}
             </p>
           )}
 
@@ -167,13 +185,13 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-gray-500">배점</span>
+              <span className="text-xs text-gray-500">답칸 수</span>
               <input
                 type="number"
                 min={1}
-                max={100}
-                value={q.points}
-                onChange={(e) => update({ points: parseInt(e.target.value, 10) || 1 })}
+                max={10}
+                value={q.sub_count ?? 1}
+                onChange={(e) => update({ sub_count: Math.max(1, parseInt(e.target.value, 10) || 1) })}
                 className="border border-gray-300 rounded px-2 py-2"
               />
             </label>

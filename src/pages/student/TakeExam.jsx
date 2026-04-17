@@ -114,9 +114,13 @@ export default function TakeExam() {
         setQuestions(sorted)
         setSession(sessRow)
 
-        // 이미 제출된 시험이면 결과 표시
+        // 이미 제출된 시험이면 결과 표시 (results 포함)
         if (sessRow.submitted) {
-          setResult({ score: sessRow.score, maxScore: sessRow.max_score })
+          setResult({
+            score: sessRow.score,
+            maxScore: sessRow.max_score,
+            results: sessRow.results ?? [],
+          })
           setLoading(false)
           return
         }
@@ -278,44 +282,123 @@ export default function TakeExam() {
     )
   }
 
-  // ─── 제출 완료 화면 ───
+  // ─── 제출 완료 화면 (상세 결과) ───
   if (result) {
     const pct = result.maxScore > 0 ? Math.round((result.score / result.maxScore) * 100) : 0
+    const items = Array.isArray(result.results) ? result.results : []
+    const correctCount = items.filter((r) => r.isCorrect === true).length
+    const wrongCount = items.filter((r) => r.isCorrect === false).length
+    const essayCount = items.filter((r) => r.isCorrect === null).length
+
     return (
-      <div className="min-h-full flex flex-col items-center justify-center bg-student-bg gap-6 p-6">
-        {/* 점수 원형 그래프 */}
-        <div className="relative w-40 h-40">
-          <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
-            <circle cx="60" cy="60" r="52" fill="none" stroke="#e5e7eb" strokeWidth="10" />
-            <circle
-              cx="60"
-              cy="60"
-              r="52"
-              fill="none"
-              stroke="#10b981"
-              strokeWidth="10"
-              strokeLinecap="round"
-              strokeDasharray={`${(pct / 100) * 2 * Math.PI * 52} ${2 * Math.PI * 52}`}
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-3xl font-bold text-gray-900">{pct}점</span>
+      <div className="min-h-full flex flex-col bg-student-bg">
+        <header className="bg-white border-b border-gray-200 px-4 py-3 text-center">
+          <h2 className="text-lg font-bold text-gray-900">시험 결과</h2>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+          {/* 점수 원형 그래프 */}
+          <div className="flex flex-col items-center gap-3 py-2">
+            <div className="relative w-32 h-32">
+              <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+                <circle cx="60" cy="60" r="52" fill="none" stroke="#e5e7eb" strokeWidth="10" />
+                <circle
+                  cx="60" cy="60" r="52" fill="none"
+                  stroke={pct >= 60 ? '#10b981' : '#ef4444'}
+                  strokeWidth="10" strokeLinecap="round"
+                  strokeDasharray={`${(pct / 100) * 2 * Math.PI * 52} ${2 * Math.PI * 52}`}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl font-bold text-gray-900">{result.score}</span>
+                <span className="text-xs text-gray-400">/ {result.maxScore}점</span>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              {student.name}
+            </p>
           </div>
+
+          {/* 요약 카드 */}
+          {items.length > 0 && (
+            <div className="flex gap-2 text-center text-sm">
+              <div className="flex-1 rounded-xl bg-green-50 border border-green-200 py-2">
+                <span className="text-lg font-bold text-green-600">{correctCount}</span>
+                <p className="text-xs text-green-600">맞음</p>
+              </div>
+              <div className="flex-1 rounded-xl bg-red-50 border border-red-200 py-2">
+                <span className="text-lg font-bold text-red-500">{wrongCount}</span>
+                <p className="text-xs text-red-500">틀림</p>
+              </div>
+              {essayCount > 0 && (
+                <div className="flex-1 rounded-xl bg-amber-50 border border-amber-200 py-2">
+                  <span className="text-lg font-bold text-amber-500">{essayCount}</span>
+                  <p className="text-xs text-amber-500">채점 대기</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 문항별 정오 목록 */}
+          {items.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-sm font-bold text-gray-700">문항별 결과</h3>
+              {items.map((r) => (
+                <div
+                  key={r.questionId}
+                  className={`rounded-xl border p-3 flex items-start gap-3 ${
+                    r.isCorrect === true
+                      ? 'border-green-200 bg-green-50/50'
+                      : r.isCorrect === false
+                        ? 'border-red-200 bg-red-50/50'
+                        : 'border-amber-200 bg-amber-50/50'
+                  }`}
+                >
+                  <span
+                    className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                      r.isCorrect === true
+                        ? 'bg-green-500 text-white'
+                        : r.isCorrect === false
+                          ? 'bg-red-500 text-white'
+                          : 'bg-amber-400 text-white'
+                    }`}
+                  >
+                    {r.isCorrect === true ? 'O' : r.isCorrect === false ? 'X' : '?'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-bold text-gray-700">{r.number}번</span>
+                    {r.isCorrect === null ? (
+                      <p className="text-xs text-amber-600 mt-0.5">서술형 — 채점 대기</p>
+                    ) : (
+                      <div className="text-xs mt-0.5">
+                        <p className={r.isCorrect ? 'text-green-700' : 'text-red-600'}>
+                          내 답: {r.studentAnswer || '(미작성)'}
+                        </p>
+                        {!r.isCorrect && (
+                          <p className="text-gray-500 mt-0.5">정답: {r.correctAnswer}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <span className={`text-xs font-bold shrink-0 ${
+                    r.isCorrect === true ? 'text-green-600' : 'text-gray-400'
+                  }`}>
+                    {r.isCorrect === true ? `+${r.earned}` : r.isCorrect === false ? '0' : '-'}점
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-gray-900">시험 완료!</h2>
-          <p className="mt-1 text-gray-600">
-            {student.name} · {result.score} / {result.maxScore}점
-          </p>
+        <div className="bg-white border-t border-gray-200 px-4 py-3">
+          <button
+            onClick={() => navigate('/student/exams', { replace: true })}
+            className="w-full rounded-2xl bg-student text-white text-lg py-4 font-bold shadow"
+          >
+            시험 목록으로
+          </button>
         </div>
-
-        <button
-          onClick={() => navigate('/student/exams', { replace: true })}
-          className="rounded-2xl bg-student text-white text-lg py-4 px-10 font-bold shadow"
-        >
-          시험 목록으로
-        </button>
       </div>
     )
   }
@@ -515,7 +598,24 @@ export default function TakeExam() {
 //  답 입력 컴포넌트 (유형별 분기)
 // ═══════════════════════════════════════════
 
+const MATH_SYMBOLS = ['×', '÷', '+', '-', '=', '(', ')', '만', '억']
+
 function AnswerInput({ question, value, onChange }) {
+  const textareaRef = useRef(null)
+
+  const insertSymbol = (symbol) => {
+    const el = textareaRef.current
+    if (!el) return
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const next = value.slice(0, start) + symbol + value.slice(end)
+    onChange(next)
+    requestAnimationFrame(() => {
+      el.selectionStart = el.selectionEnd = start + symbol.length
+      el.focus()
+    })
+  }
+
   if (question.type === 'multiple_choice') {
     const options = Array.isArray(question.options) ? question.options : []
     return (
@@ -542,23 +642,70 @@ function AnswerInput({ question, value, onChange }) {
 
   if (question.type === 'essay') {
     return (
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={5}
-        placeholder="답을 작성해주세요…"
-        className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm leading-relaxed focus:outline-none focus:border-student resize-none"
-      />
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-1.5">
+          {MATH_SYMBOLS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => insertSymbol(s)}
+              className="w-9 h-9 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 active:bg-gray-300"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={5}
+          placeholder="풀이과정과 답을 작성해주세요…"
+          className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm leading-relaxed focus:outline-none focus:border-student resize-none"
+        />
+      </div>
     )
   }
 
   // short_answer (기본값)
+  const subCount = question.sub_count ?? 1
+
+  if (subCount > 1) {
+    // 복수 답칸: 쉼표로 구분해서 저장
+    const parts = (value || '').split(',').map((s) => s.trim())
+    while (parts.length < subCount) parts.push('')
+
+    const updatePart = (idx, v) => {
+      const next = [...parts]
+      next[idx] = v
+      onChange(next.join(', '))
+    }
+
+    return (
+      <div className="flex flex-col gap-2">
+        {parts.slice(0, subCount).map((part, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 shrink-0 w-6 text-right">({idx + 1})</span>
+            <input
+              type="text"
+              value={part}
+              onChange={(e) => updatePart(idx, e.target.value)}
+              placeholder={`(${idx + 1})의 답`}
+              autoComplete="off"
+              className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-center text-base font-medium focus:outline-none focus:border-student"
+            />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <input
       type="text"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      placeholder="답을 입력해주세요"
+      placeholder="답이 여러 개이면 쉼표(,)로 구분"
       autoComplete="off"
       className="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-center text-lg font-medium focus:outline-none focus:border-student"
     />
