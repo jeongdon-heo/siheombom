@@ -42,6 +42,7 @@ create policy "teachers insert own"
 -- =====================================================
 -- 3. 학급코드 생성기 (혼동 문자 제외: 0,1,I,O,L)
 -- =====================================================
+drop function if exists public.gen_class_code();
 create or replace function public.gen_class_code()
 returns text
 language plpgsql
@@ -71,6 +72,7 @@ $$;
 -- 4. auth.users 신규 가입 시 teachers 프로필 자동 생성
 --    회원가입 시 options.data 에 name, class_name 전달
 -- =====================================================
+drop function if exists public.handle_new_teacher() cascade;
 create or replace function public.handle_new_teacher()
 returns trigger
 language plpgsql
@@ -100,6 +102,7 @@ create trigger on_auth_user_created
 -- 5. 학생용: 학급코드로 교사 조회 (anon 접근 가능)
 --    RLS 때문에 teachers 를 직접 select 못 하므로 함수로 노출
 -- =====================================================
+drop function if exists public.find_teacher_by_class_code(text);
 create or replace function public.find_teacher_by_class_code(code text)
 returns table(id uuid, name text, class_name text)
 language sql
@@ -118,6 +121,7 @@ grant execute on function public.find_teacher_by_class_code(text) to anon, authe
 -- =====================================================
 -- 6. 학급코드 재생성 (교사 본인만)
 -- =====================================================
+drop function if exists public.regenerate_class_code();
 create or replace function public.regenerate_class_code()
 returns text
 language plpgsql

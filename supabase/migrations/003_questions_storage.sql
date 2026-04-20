@@ -52,6 +52,7 @@ create policy "questions delete by owner teacher"
 --    학생이 시험 볼 때 questions 를 직접 SELECT 못 하므로 함수 제공
 --    correct_answer 은 제외하고 반환 (채점 시 서버에서만 사용)
 -- =====================================================
+drop function if exists public.list_questions_for_student(uuid, text);
 create or replace function public.list_questions_for_student(exam_id_in uuid, code text)
 returns table(
   id uuid,

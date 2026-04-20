@@ -1,6 +1,7 @@
 -- 010: start_or_resume_session에 results 컬럼 추가 반환
 -- 제출 완료된 시험의 문항별 채점 결과��� 학생에게 보여주기 위함
 
+drop function if exists public.start_or_resume_session(uuid, uuid);
 create or replace function public.start_or_resume_session(
   exam_id_in uuid,
   student_id_in uuid

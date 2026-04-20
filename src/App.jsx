@@ -5,6 +5,7 @@ import TeacherSignup from './pages/teacher/Signup.jsx'
 import TeacherHome from './pages/teacher/Home.jsx'
 import TeacherSettings from './pages/teacher/Settings.jsx'
 import NewExam from './pages/teacher/exams/New.jsx'
+import ExamsList from './pages/teacher/exams/List.jsx'
 import ClassCodeEntry from './pages/student/ClassCodeEntry.jsx'
 import NameNumberEntry from './pages/student/NameNumberEntry.jsx'
 import ExamList from './pages/student/ExamList.jsx'
@@ -28,7 +29,7 @@ function EnvBanner() {
 
 export default function App() {
   return (
-    <div className="h-full max-w-[480px] mx-auto bg-white flex flex-col">
+    <div className="h-full w-full md:max-w-[800px] mx-auto bg-white flex flex-col">
       <EnvBanner />
       <div className="flex-1 min-h-0">
         <Routes>
@@ -49,6 +50,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <TeacherSettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/exams"
+            element={
+              <ProtectedRoute>
+                <ExamsList />
               </ProtectedRoute>
             }
           />

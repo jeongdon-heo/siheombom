@@ -12,6 +12,7 @@
 --    Storage 는 별개 서비스라 여기서 보이는 uid 와 Storage 내부 uid 가 다를 수 있음 →
 --    그 차이가 있으면 JWT 를 Storage 가 제대로 못 읽는다는 증거
 -- =====================================================
+drop function if exists public.whoami();
 create or replace function public.whoami()
 returns table(uid uuid, role text, jwt_sub text, jwt_role text)
 language sql

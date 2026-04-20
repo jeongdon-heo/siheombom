@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase.js'
 import { useStudent } from '../../context/StudentContext.jsx'
+import { getSymbols } from '../../lib/optionStyle.js'
+import { getButtonSymbols } from '../../lib/inputButtons.js'
 
 const STORAGE_PREFIX = 'siheombom.session'
 
@@ -14,6 +16,8 @@ export default function TakeExam() {
   const { student } = useStudent()
 
   const [questions, setQuestions] = useState([])
+  const [passages, setPassages] = useState([])
+  const [expandedPassageId, setExpandedPassageId] = useState(null)
   const [session, setSession] = useState(null)
   const [answers, setAnswers] = useState({})
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -90,7 +94,11 @@ export default function TakeExam() {
 
     ;(async () => {
       try {
-        const [{ data: qs, error: qErr }, { data: sess, error: sErr }] = await Promise.all([
+        const [
+          { data: qs, error: qErr },
+          { data: sess, error: sErr },
+          { data: ps, error: pErr },
+        ] = await Promise.all([
           supabase.rpc('list_questions_for_student', {
             exam_id_in: examId,
             code: student.classCode,
@@ -99,10 +107,15 @@ export default function TakeExam() {
             exam_id_in: examId,
             student_id_in: student.studentId,
           }),
+          supabase.rpc('list_passages_for_student', {
+            exam_id_in: examId,
+            code: student.classCode,
+          }),
         ])
 
         if (qErr) throw new Error(qErr.message)
         if (sErr) throw new Error(sErr.message)
+        if (pErr) throw new Error(pErr.message)
         if (!qs?.length) throw new Error('문항을 불러올 수 없습니다.')
 
         const sessRow = Array.isArray(sess) ? sess[0] : sess
@@ -112,6 +125,7 @@ export default function TakeExam() {
 
         const sorted = [...qs].sort((a, b) => a.number - b.number)
         setQuestions(sorted)
+        setPassages(Array.isArray(ps) ? ps : [])
         setSession(sessRow)
 
         // 이미 제출된 시험이면 결과 표시 (results 포함)
@@ -250,6 +264,17 @@ export default function TakeExam() {
   const totalCount = questions.length
   const progressPct = totalCount > 0 ? Math.round((answeredCount / totalCount) * 100) : 0
   const currentQ = questions[currentIndex]
+  const currentPassage = currentQ?.passage_id
+    ? passages.find((p) => p.id === currentQ.passage_id)
+    : null
+
+  // 다른 지문의 문항으로 넘어가면 자동 접힘 (같은 passage_id면 유지)
+  useEffect(() => {
+    const pid = currentQ?.passage_id ?? null
+    if (expandedPassageId && expandedPassageId !== pid) {
+      setExpandedPassageId(null)
+    }
+  }, [currentQ?.passage_id, expandedPassageId])
 
   // ═══════════════════════════════════════════
   //  렌더링
@@ -466,15 +491,46 @@ export default function TakeExam() {
 
       {/* ── 문항 카드 ── */}
       {currentQ && (
-        <main className="flex-1 overflow-y-auto p-4">
+        <main className="flex-1 overflow-y-auto px-2 py-3">
           <div className="rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden">
+            {/* 지문 토글 */}
+            {currentPassage && (
+              <div className="border-b border-amber-100 bg-amber-50/60">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedPassageId(
+                      expandedPassageId === currentPassage.id ? null : currentPassage.id,
+                    )
+                  }
+                  className="w-full flex items-center justify-between px-4 py-3 text-left"
+                >
+                  <span className="text-sm font-semibold text-amber-900">
+                    📖 {currentPassage.title || '지문'}
+                  </span>
+                  <span className="text-xs text-amber-700">
+                    {expandedPassageId === currentPassage.id ? '▲ 접기' : '▼ 펼치기'}
+                  </span>
+                </button>
+                {expandedPassageId === currentPassage.id && currentPassage.image_url && (
+                  <div className="pb-2">
+                    <img
+                      src={currentPassage.image_url}
+                      alt={currentPassage.title || '지문'}
+                      className="w-full h-auto block border-y border-amber-200 bg-white"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 문항 이미지 */}
             {currentQ.image_url && (
               <div className="border-b border-gray-100 bg-gray-50">
                 <img
                   src={currentQ.image_url}
                   alt={`${currentQ.number}번 문제`}
-                  className="w-full object-contain max-h-[50vh]"
+                  className="w-full h-auto block"
                 />
               </div>
             )}
@@ -487,13 +543,6 @@ export default function TakeExam() {
                 </span>
                 <span className="text-xs text-gray-400">{currentQ.points}점</span>
               </div>
-
-              {/* 문제 텍스트 */}
-              {currentQ.text && (
-                <p className="text-gray-900 leading-relaxed whitespace-pre-wrap">
-                  {currentQ.text}
-                </p>
-              )}
 
               {/* ── 답 입력 UI ── */}
               <AnswerInput
@@ -598,41 +647,104 @@ export default function TakeExam() {
 //  답 입력 컴포넌트 (유형별 분기)
 // ═══════════════════════════════════════════
 
-const MATH_SYMBOLS = ['×', '÷', '+', '-', '=', '(', ')', '만', '억']
-
 function AnswerInput({ question, value, onChange }) {
-  const textareaRef = useRef(null)
+  // 포커스된 입력 추적: { el, partIdx(null=단일) }
+  const activeRef = useRef(null)
+  const valueRef = useRef(value)
+  valueRef.current = value
+
+  const subCount = question.sub_count ?? 1
+  const buttonSymbols = getButtonSymbols(question.input_buttons)
 
   const insertSymbol = (symbol) => {
-    const el = textareaRef.current
-    if (!el) return
-    const start = el.selectionStart
-    const end = el.selectionEnd
-    const next = value.slice(0, start) + symbol + value.slice(end)
-    onChange(next)
+    const active = activeRef.current
+    if (!active) {
+      // 포커스 없음 → 첫 입력칸에 덧붙이기
+      if (subCount > 1) {
+        const parts = (valueRef.current || '').split(',').map((s) => s.trim())
+        while (parts.length < subCount) parts.push('')
+        parts[0] = (parts[0] || '') + symbol
+        onChange(parts.join(', '))
+      } else {
+        onChange((valueRef.current ?? '') + symbol)
+      }
+      return
+    }
+    const { el, partIdx } = active
+    const start = el.selectionStart ?? el.value.length
+    const end = el.selectionEnd ?? el.value.length
+    const cur = el.value ?? ''
+    const nextPart = cur.slice(0, start) + symbol + cur.slice(end)
+
+    if (partIdx == null) {
+      onChange(nextPart)
+    } else {
+      const parts = (valueRef.current || '').split(',').map((s) => s.trim())
+      while (parts.length < subCount) parts.push('')
+      parts[partIdx] = nextPart
+      onChange(parts.join(', '))
+    }
     requestAnimationFrame(() => {
-      el.selectionStart = el.selectionEnd = start + symbol.length
       el.focus()
+      el.selectionStart = el.selectionEnd = start + symbol.length
     })
   }
 
+  const ButtonBar = () =>
+    buttonSymbols.length > 0 ? (
+      <div className="flex flex-wrap gap-1.5">
+        {buttonSymbols.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => insertSymbol(s)}
+            className="min-w-[40px] h-10 px-2 rounded-lg bg-gray-100 text-gray-700 text-base font-medium hover:bg-gray-200 active:bg-gray-300"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    ) : null
+
   if (question.type === 'multiple_choice') {
-    const options = Array.isArray(question.options) ? question.options : []
+    const symbols = getSymbols(question.option_style, question.option_count)
+    const selected = new Set(
+      (value || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    )
+
+    const toggle = (sym) => {
+      const next = new Set(selected)
+      if (next.has(sym)) next.delete(sym)
+      else next.add(sym)
+      const ordered = symbols.filter((s) => next.has(s))
+      onChange(ordered.join(', '))
+    }
+
+    // 괄호 기호는 너비가 넓어서 글자 크기 조정
+    const isWide = symbols[0]?.length > 1
+    const gridCols = symbols.length <= 5 ? 'grid-cols-5' : 'grid-cols-5'
+
     return (
-      <div className="flex flex-col gap-2">
-        {options.map((opt, idx) => {
-          const selected = value === opt
+      <div className={`grid ${gridCols} gap-2`}>
+        {symbols.map((sym) => {
+          const on = selected.has(sym)
           return (
             <button
-              key={idx}
-              onClick={() => onChange(selected ? '' : opt)}
-              className={`w-full text-left px-4 py-3.5 rounded-xl border-2 text-sm font-medium transition-all ${
-                selected
-                  ? 'border-student bg-student/10 text-student'
+              key={sym}
+              onClick={() => toggle(sym)}
+              className={`aspect-square rounded-2xl border-2 font-bold transition-all ${
+                isWide ? 'text-base' : 'text-2xl'
+              } ${
+                on
+                  ? 'border-student bg-student text-white shadow'
                   : 'border-gray-200 bg-white text-gray-700 active:border-student/40'
               }`}
             >
-              {opt}
+              {sym}
             </button>
           )
         })}
@@ -643,22 +755,13 @@ function AnswerInput({ question, value, onChange }) {
   if (question.type === 'essay') {
     return (
       <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          {MATH_SYMBOLS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => insertSymbol(s)}
-              className="w-9 h-9 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 active:bg-gray-300"
-            >
-              {s}
-            </button>
-          ))}
-        </div>
+        <ButtonBar />
         <textarea
-          ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onFocus={(e) => {
+            activeRef.current = { el: e.target, partIdx: null }
+          }}
           rows={5}
           placeholder="풀이과정과 답을 작성해주세요…"
           className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm leading-relaxed focus:outline-none focus:border-student resize-none"
@@ -668,8 +771,6 @@ function AnswerInput({ question, value, onChange }) {
   }
 
   // short_answer (기본값)
-  const subCount = question.sub_count ?? 1
-
   if (subCount > 1) {
     // 복수 답칸: 쉼표로 구분해서 저장
     const parts = (value || '').split(',').map((s) => s.trim())
@@ -683,6 +784,7 @@ function AnswerInput({ question, value, onChange }) {
 
     return (
       <div className="flex flex-col gap-2">
+        <ButtonBar />
         {parts.slice(0, subCount).map((part, idx) => (
           <div key={idx} className="flex items-center gap-2">
             <span className="text-xs text-gray-400 shrink-0 w-6 text-right">({idx + 1})</span>
@@ -690,6 +792,9 @@ function AnswerInput({ question, value, onChange }) {
               type="text"
               value={part}
               onChange={(e) => updatePart(idx, e.target.value)}
+              onFocus={(e) => {
+                activeRef.current = { el: e.target, partIdx: idx }
+              }}
               placeholder={`(${idx + 1})의 답`}
               autoComplete="off"
               className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-center text-base font-medium focus:outline-none focus:border-student"
@@ -701,13 +806,19 @@ function AnswerInput({ question, value, onChange }) {
   }
 
   return (
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="답이 여러 개이면 쉼표(,)로 구분"
-      autoComplete="off"
-      className="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-center text-lg font-medium focus:outline-none focus:border-student"
-    />
+    <div className="flex flex-col gap-2">
+      <ButtonBar />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={(e) => {
+          activeRef.current = { el: e.target, partIdx: null }
+        }}
+        placeholder="답이 여러 개이면 쉼표(,)로 구분"
+        autoComplete="off"
+        className="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-center text-lg font-medium focus:outline-none focus:border-student"
+      />
+    </div>
   )
 }

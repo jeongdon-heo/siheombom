@@ -6,6 +6,7 @@ import { pdfToImages, extractTextPositions, computeBboxesFromTextLayer, findBbox
 import { cropByBbox, cropByPosition } from '../../../lib/crop.js'
 import { analyzeExam } from '../../../lib/ai.js'
 import QuestionCard from './QuestionCard.jsx'
+import PassageEditor, { makePassageTitle } from './PassageEditor.jsx'
 
 function StepBadge({ step, active, label }) {
   return (
@@ -32,6 +33,7 @@ export default function NewExam() {
   const [examImages, setExamImages] = useState([])
   const [answerImages, setAnswerImages] = useState([])
   const [questions, setQuestions] = useState([])
+  const [passages, setPassages] = useState([])
 
   const [working, setWorking] = useState(false)
   const [workingMsg, setWorkingMsg] = useState('')
@@ -156,15 +158,24 @@ export default function NewExam() {
           }
         }
 
+        const qType = ['multiple_choice', 'short_answer', 'essay'].includes(q.type)
+          ? q.type
+          : 'short_answer'
+        const rawOptCount = parseInt(q.option_count, 10)
+        const optionCount =
+          qType === 'multiple_choice'
+            ? Number.isFinite(rawOptCount) && rawOptCount >= 2 && rawOptCount <= 10
+              ? rawOptCount
+              : 5
+            : 5
         return {
           id: `q-${i}-${Math.random().toString(36).slice(2, 8)}`,
           number: qNumber,
-          text: q.text ?? '',
-          type: ['multiple_choice', 'short_answer', 'essay'].includes(q.type)
-            ? q.type
-            : 'short_answer',
-          options: Array.isArray(q.options) ? q.options : [],
+          type: qType,
           correct_answer: q.correct_answer ?? '',
+          option_count: optionCount,
+          option_style: 'number_circle',
+          input_buttons: 'none',
           points: 0, // 저장 시 100 ÷ 문항수로 자동 계산
           page,
           position: ['top', 'middle', 'bottom'].includes(q.position)
@@ -193,10 +204,11 @@ export default function NewExam() {
       {
         id: `q-new-${Date.now()}`,
         number: maxNum + 1,
-        text: '',
         type: 'short_answer',
-        options: [],
         correct_answer: '',
+        option_count: 5,
+        option_style: 'number_circle',
+        input_buttons: 'none',
         points: 0,
         page: 1,
         position: 'middle',
@@ -212,6 +224,23 @@ export default function NewExam() {
     setQuestions((qs) => qs.map((q) => (q.id === id ? next : q)))
   const deleteQuestion = (id) =>
     setQuestions((qs) => qs.filter((q) => q.id !== id))
+
+  const addPassage = () => {
+    setPassages((ps) => [
+      ...ps,
+      {
+        id: `p-new-${Date.now()}`,
+        page: 1,
+        bbox: { x: 0, y: 0, w: 100, h: 30 },
+        questionNumbers: [],
+        expanded: true,
+      },
+    ])
+  }
+  const updatePassage = (id, next) =>
+    setPassages((ps) => ps.map((p) => (p.id === id ? next : p)))
+  const deletePassage = (id) =>
+    setPassages((ps) => ps.filter((p) => p.id !== id))
 
   const sortedQuestions = useMemo(
     () => [...questions].sort((a, b) => a.number - b.number),
@@ -259,6 +288,7 @@ export default function NewExam() {
 
       // 배점 자동 계산: 총점 100점 ÷ 문항 수
       const pointsPerQ = Math.floor(100 / sortedQuestions.length)
+      const numberToQuestionId = new Map()
 
       for (const q of sortedQuestions) {
         setWorkingMsg(`저장 중… (${q.number}번 이미지 업로드)`)
@@ -291,22 +321,79 @@ export default function NewExam() {
           .getPublicUrl(path)
 
         // [3/3] questions insert
-        const { error: e3 } = await supabase.from('questions').insert({
-          exam_id: exam.id,
-          number: q.number,
-          text: q.text,
-          type: q.type,
-          options: q.options,
-          correct_answer: q.correct_answer,
-          points: pointsPerQ,
-          image_url: pub.publicUrl,
-          learning_objective: q.learning_objective,
-          page: q.page,
-          position: q.position,
-          bbox: q.bbox,
-          sub_count: q.sub_count ?? 1,
-        })
+        const { data: insertedQ, error: e3 } = await supabase
+          .from('questions')
+          .insert({
+            exam_id: exam.id,
+            number: q.number,
+            text: '',
+            type: q.type,
+            options: null,
+            correct_answer: q.correct_answer,
+            points: pointsPerQ,
+            image_url: pub.publicUrl,
+            learning_objective: q.learning_objective,
+            page: q.page,
+            position: q.position,
+            bbox: q.bbox,
+            sub_count: q.sub_count ?? 1,
+            option_count: q.type === 'multiple_choice' ? (q.option_count ?? 5) : 5,
+            option_style:
+              q.type === 'multiple_choice' ? (q.option_style || 'number_circle') : 'number_circle',
+            input_buttons:
+              q.type === 'multiple_choice' ? 'none' : (q.input_buttons || 'none'),
+          })
+          .select('id, number')
+          .single()
         if (e3) throw new Error(`[3/3 questions insert q${q.number}] ${e3.message}`)
+        numberToQuestionId.set(insertedQ.number, insertedQ.id)
+      }
+
+      // ── 지문 업로드 + 삽입 + 연결 ──
+      for (let i = 0; i < passages.length; i++) {
+        const p = passages[i]
+        if (!p.questionNumbers?.length) continue
+        setWorkingMsg(`저장 중… (지문 ${i + 1} 업로드)`)
+
+        const passageCrop = await getCrop(p.page, null, p.bbox)
+        if (!passageCrop) throw new Error(`p.${p.page} 지문 이미지를 찾을 수 없습니다.`)
+
+        const path = `${teacher.id}/${exam.id}/passages/p${String(i + 1).padStart(2, '0')}.jpg`
+        const { error: pe1 } = await supabase.storage
+          .from('question-images')
+          .upload(path, passageCrop.blob, {
+            contentType: 'image/jpeg',
+            upsert: true,
+          })
+        if (pe1) throw new Error(`[passage upload @ ${path}] ${pe1.message}`)
+        uploadedPaths.push(path)
+        const { data: passagePub } = supabase.storage
+          .from('question-images')
+          .getPublicUrl(path)
+
+        const { data: insertedP, error: pe2 } = await supabase
+          .from('passages')
+          .insert({
+            exam_id: exam.id,
+            title: makePassageTitle(p.questionNumbers),
+            image_url: passagePub.publicUrl,
+            page: p.page,
+            bbox: p.bbox,
+          })
+          .select('id')
+          .single()
+        if (pe2) throw new Error(`[passage insert] ${pe2.message}`)
+
+        const linkedIds = p.questionNumbers
+          .map((n) => numberToQuestionId.get(n))
+          .filter(Boolean)
+        if (linkedIds.length) {
+          const { error: pe3 } = await supabase
+            .from('questions')
+            .update({ passage_id: insertedP.id })
+            .in('id', linkedIds)
+          if (pe3) throw new Error(`[passage link] ${pe3.message}`)
+        }
       }
 
       navigate('/teacher', { replace: true })
@@ -468,6 +555,30 @@ export default function NewExam() {
             </button>
           </div>
 
+          {/* ── 지문 관리 ── */}
+          <section className="rounded-xl bg-amber-50/50 border border-amber-100 p-3 flex flex-col gap-2">
+            <h3 className="text-sm font-bold text-gray-800">📖 지문 관리</h3>
+            {passages.length === 0 ? (
+              <p className="text-xs text-gray-500">
+                국어처럼 여러 문항이 공통 지문을 쓰는 경우 우측 하단의 "지문 추가" 버튼으로 추가하세요. 없으면 건너뜀.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {passages.map((p) => (
+                  <PassageEditor
+                    key={p.id}
+                    p={p}
+                    allNumbers={sortedQuestions.map((q) => q.number)}
+                    pageCount={Math.max(examImages.length, 1)}
+                    examImages={examImages}
+                    onChange={(next) => updatePassage(p.id, next)}
+                    onDelete={() => deletePassage(p.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
           <div className="flex flex-col gap-2">
             {sortedQuestions.map((q) => {
               // 같은 페이지 문항들 중 이 문항의 순번(0부터)과 페이지 총 문항수
@@ -495,9 +606,19 @@ export default function NewExam() {
             type="button"
             onClick={saveExam}
             disabled={working || !questions.length}
-            className="mt-4 rounded-lg bg-teacher text-white py-3 font-semibold shadow disabled:opacity-50"
+            className="mt-4 mb-20 rounded-lg bg-teacher text-white py-3 font-semibold shadow disabled:opacity-50"
           >
             저장
+          </button>
+
+          {/* ── 플로팅: 지문 추가 ── */}
+          <button
+            type="button"
+            onClick={addPassage}
+            className="fixed right-6 bottom-20 z-40 flex items-center gap-2 px-5 py-3.5 rounded-full bg-amber-500 text-white text-sm font-bold shadow-lg shadow-amber-500/40 hover:bg-amber-600 active:scale-95 transition-all"
+          >
+            <span className="text-lg leading-none">📖</span>
+            <span>지문 추가</span>
           </button>
         </div>
       )}

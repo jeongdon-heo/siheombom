@@ -41,6 +41,7 @@ create policy "sessions select by teacher"
 --    학생이 시험 시작 또는 이어보기 할 때 호출
 --    없으면 생성, 있으면 기존 세션 반환
 -- =====================================================
+drop function if exists public.start_or_resume_session(uuid, uuid);
 create or replace function public.start_or_resume_session(
   exam_id_in uuid,
   student_id_in uuid
@@ -96,6 +97,7 @@ grant execute on function public.start_or_resume_session(uuid, uuid) to anon, au
 -- 3. save_session_answers
 --    답안 자동 저장 (매 답 변경 시 호출)
 -- =====================================================
+drop function if exists public.save_session_answers(uuid, uuid, jsonb, int);
 create or replace function public.save_session_answers(
   session_id_in uuid,
   student_id_in uuid,
@@ -124,6 +126,7 @@ grant execute on function public.save_session_answers(uuid, uuid, jsonb, int) to
 --    시험 제출 + 자동 채점
 --    객관식/단답형: 자동 채점, 서술형: null 처리
 -- =====================================================
+drop function if exists public.submit_exam_session(uuid, uuid);
 create or replace function public.submit_exam_session(
   session_id_in uuid,
   student_id_in uuid
@@ -222,6 +225,7 @@ grant execute on function public.submit_exam_session(uuid, uuid) to anon, authen
 -- 5. list_student_exams (기존 list_exams_by_class_code 대체)
 --    시험 목록 + 세션 상태(진행중/완료/미시작) 함께 반환
 -- =====================================================
+drop function if exists public.list_student_exams(text, uuid);
 create or replace function public.list_student_exams(code text, student_id_in uuid)
 returns table(
   id uuid,

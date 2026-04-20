@@ -69,6 +69,7 @@ create policy "exams delete by teacher"
 -- 3. student_join: 학급코드 + 이름 + 번호 → 학생 행 upsert
 --    anon 키로 호출 가능, 입력값 검증 포함
 -- =====================================================
+drop function if exists public.student_join(text, text, int);
 create or replace function public.student_join(code text, s_name text, s_number int)
 returns table(
   id uuid,
@@ -126,6 +127,7 @@ grant execute on function public.student_join(text, text, int) to anon, authenti
 -- =====================================================
 -- 4. list_exams_by_class_code: 학생이 자기 학급 시험 목록 조회
 -- =====================================================
+drop function if exists public.list_exams_by_class_code(text);
 create or replace function public.list_exams_by_class_code(code text)
 returns table(id uuid, subject text, unit text, created_at timestamptz)
 language sql

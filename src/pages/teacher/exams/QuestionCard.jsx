@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import BboxEditor from './BboxEditor.jsx'
 import { findBboxOnPage } from '../../../lib/pdf.js'
+import { OPTION_STYLES } from '../../../lib/optionStyle.js'
+import { INPUT_BUTTON_SETS } from '../../../lib/inputButtons.js'
 
 const TYPE_LABEL = {
   multiple_choice: '객관식',
@@ -210,56 +212,61 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
             </select>
           </label>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-xs text-gray-500">문제 텍스트</span>
-            <textarea
-              value={q.text}
-              onChange={(e) => update({ text: e.target.value })}
-              rows={3}
-              className="border border-gray-300 rounded px-2 py-2 text-sm"
-            />
-          </label>
-
           {q.type === 'multiple_choice' && (
-            <div className="flex flex-col gap-1 text-sm">
-              <span className="text-xs text-gray-500">보기</span>
-              {q.options.map((opt, idx) => (
-                <div key={idx} className="flex gap-2">
-                  <input
-                    value={opt}
-                    onChange={(e) => {
-                      const next = [...q.options]
-                      next[idx] = e.target.value
-                      update({ options: next })
-                    }}
-                    className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      update({ options: q.options.filter((_, i) => i !== idx) })
-                    }
-                    className="text-xs text-gray-400 px-2"
-                  >
-                    삭제
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => update({ options: [...q.options, ''] })}
-                className="self-start text-xs text-teacher mt-1"
-              >
-                + 보기 추가
-              </button>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-gray-500">보기 개수</span>
+                <input
+                  type="number"
+                  min={2}
+                  max={10}
+                  value={q.option_count ?? 5}
+                  onChange={(e) =>
+                    update({
+                      option_count: Math.max(2, Math.min(10, parseInt(e.target.value, 10) || 5)),
+                    })
+                  }
+                  className="border border-gray-300 rounded px-2 py-2"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-gray-500">보기 기호</span>
+                <select
+                  value={q.option_style || 'number_circle'}
+                  onChange={(e) => update({ option_style: e.target.value })}
+                  className="border border-gray-300 rounded px-2 py-2"
+                >
+                  {Object.entries(OPTION_STYLES).map(([key, { label }]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </label>
             </div>
           )}
 
+          {(q.type === 'short_answer' || q.type === 'essay') && (
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-xs text-gray-500">입력 보조 버튼</span>
+              <select
+                value={q.input_buttons || 'none'}
+                onChange={(e) => update({ input_buttons: e.target.value })}
+                className="border border-gray-300 rounded px-2 py-2"
+              >
+                {Object.entries(INPUT_BUTTON_SETS).map(([key, { label }]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-xs text-gray-500">정답</span>
+            <span className="text-xs text-gray-500">
+              정답{q.type === 'multiple_choice' && ' (번호만, 복수면 쉼표로 구분)'}
+            </span>
             <input
               value={q.correct_answer}
               onChange={(e) => update({ correct_answer: e.target.value })}
+              placeholder={q.type === 'multiple_choice' ? '예) 2  또는  ②, ③' : ''}
               className="border border-gray-300 rounded px-2 py-2 text-sm"
             />
           </label>

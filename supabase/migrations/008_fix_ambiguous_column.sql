@@ -3,6 +3,7 @@
 --       함수 내부 SQL의 테이블 컬럼명과 충돌
 -- 해결: #variable_conflict use_column 지시문으로 컬럼 우선 참조
 
+drop function if exists public.student_join(text, text, int);
 create or replace function public.student_join(code text, s_name text, s_number int)
 returns table(
   id uuid,

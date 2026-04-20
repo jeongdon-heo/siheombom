@@ -5,6 +5,7 @@ alter table public.questions
   add column if not exists sub_count int not null default 1;
 
 -- list_questions_for_student에 sub_count 추가 반환
+drop function if exists public.list_questions_for_student(uuid, text);
 create or replace function public.list_questions_for_student(exam_id_in uuid, code text)
 returns table(
   id uuid,
