@@ -158,7 +158,7 @@ export default function NewExam() {
           }
         }
 
-        const qType = ['multiple_choice', 'short_answer', 'essay'].includes(q.type)
+        const qType = ['multiple_choice', 'short_answer', 'essay', 'matching'].includes(q.type)
           ? q.type
           : 'short_answer'
         const rawOptCount = parseInt(q.option_count, 10)
@@ -176,6 +176,15 @@ export default function NewExam() {
           option_count: optionCount,
           option_style: 'number_circle',
           input_buttons: 'none',
+          answer_format: 'text',
+          answer_order_hint: '',
+          match_count: 3,
+          manual_grading: false,
+          essay_mode: 'general',
+          answer_unit: '',
+          example_solution: '',
+          process_points: null,
+          answer_points: null,
           points: 0, // 저장 시 100 ÷ 문항수로 자동 계산
           page,
           position: ['top', 'middle', 'bottom'].includes(q.position)
@@ -209,6 +218,15 @@ export default function NewExam() {
         option_count: 5,
         option_style: 'number_circle',
         input_buttons: 'none',
+        answer_format: 'text',
+        answer_order_hint: '',
+        match_count: 3,
+        manual_grading: false,
+        essay_mode: 'general',
+        answer_unit: '',
+        example_solution: '',
+        process_points: null,
+        answer_points: null,
         points: 0,
         page: 1,
         position: 'middle',
@@ -342,6 +360,33 @@ export default function NewExam() {
               q.type === 'multiple_choice' ? (q.option_style || 'number_circle') : 'number_circle',
             input_buttons:
               q.type === 'multiple_choice' ? 'none' : (q.input_buttons || 'none'),
+            answer_format:
+              q.type === 'short_answer' ? (q.answer_format || 'text') : 'text',
+            answer_order_hint:
+              (q.sub_count ?? 1) > 1 ? (q.answer_order_hint || '') : '',
+            match_count:
+              q.type === 'matching'
+                ? Math.max(2, Math.min(10, parseInt(q.match_count, 10) || 3))
+                : 3,
+            manual_grading:
+              q.manual_grading === true ||
+              (typeof q.correct_answer === 'string' &&
+                q.correct_answer.trim().startsWith('(예)')),
+            essay_mode:
+              q.type === 'essay'
+                ? (['general', 'math'].includes(q.essay_mode) ? q.essay_mode : 'general')
+                : 'general',
+            answer_unit:
+              q.type === 'essay' && q.essay_mode === 'math' ? (q.answer_unit || null) : null,
+            example_solution: q.type === 'essay' ? (q.example_solution || null) : null,
+            process_points:
+              q.type === 'essay' && q.essay_mode === 'math' && Number.isFinite(q.process_points)
+                ? q.process_points
+                : null,
+            answer_points:
+              q.type === 'essay' && q.essay_mode === 'math' && Number.isFinite(q.answer_points)
+                ? q.answer_points
+                : null,
           })
           .select('id, number')
           .single()

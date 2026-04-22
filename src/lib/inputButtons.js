@@ -18,6 +18,10 @@ export const INPUT_BUTTON_SETS = {
     label: '한글 자음(ㄱㄴㄷ)',
     symbols: ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ'],
   },
+  unit: {
+    label: '자주 쓰는 단위',
+    symbols: ['cm', 'm', '개', '만', '억', '원', '명', '번', '°'],
+  },
 }
 
 export const DEFAULT_INPUT_BUTTONS = 'none'

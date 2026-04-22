@@ -1,0 +1,472 @@
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { supabase } from '../../../lib/supabase.js'
+
+export default function SessionDetail() {
+  const { examId, sessionId } = useParams()
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [savingNumber, setSavingNumber] = useState(null)
+  const [aiBusyNumber, setAiBusyNumber] = useState(null)
+  const [batchBusy, setBatchBusy] = useState(false)
+  const [aiConfirmed, setAiConfirmed] = useState(false)
+  const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }
+
+  const load = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data: d, error: err } = await supabase.rpc('get_session_for_teacher', {
+        session_id_in: sessionId,
+      })
+      if (err) throw new Error(err.message)
+      setData(d)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])
+
+  const applyResults = (d) => {
+    setData((prev) =>
+      prev
+        ? { ...prev, session: { ...prev.session, score: d.score, results: d.results } }
+        : prev,
+    )
+  }
+
+  const saveScore = async (number, finalScore) => {
+    setSavingNumber(number)
+    setError(null)
+    try {
+      const { data: d, error: err } = await supabase.rpc('update_question_grade', {
+        session_id_in: sessionId,
+        question_number_in: number,
+        final_score_in: finalScore,
+      })
+      if (err) throw new Error(err.message)
+      applyResults(d)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSavingNumber(null)
+    }
+  }
+
+  const callAi = async (number) => {
+    setAiBusyNumber(number)
+    setError(null)
+    try {
+      const { data: d, error: err } = await supabase.functions.invoke('grade-with-ai', {
+        body: { session_id: sessionId, question_number: number },
+      })
+      if (err) throw new Error(err.message || 'AI 호출 실패')
+      if (d?.error) throw new Error(`${d.error}${d.detail ? ` · ${d.detail}` : ''}`)
+      // DB는 edge function 내부에서 이미 업데이트됨 → 세션 리로드
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setAiBusyNumber(null)
+    }
+  }
+
+  const confirmAi = (message, onConfirm) => {
+    if (aiConfirmed) {
+      onConfirm()
+      return
+    }
+    setConfirmModal({
+      message,
+      onConfirm: () => {
+        setAiConfirmed(true)
+        setConfirmModal(null)
+        onConfirm()
+      },
+    })
+  }
+
+  const requestAi = (number) =>
+    confirmAi('이 문항을 AI로 채점할까요? Claude API가 호출됩니다.', () => callAi(number))
+
+  const requestBatchAi = (pendingNumbers) =>
+    confirmAi(
+      `채점 대기 ${pendingNumbers.length}문항을 AI로 일괄 채점합니다. Claude API가 ${pendingNumbers.length}회 호출됩니다.`,
+      async () => {
+        setBatchBusy(true)
+        setError(null)
+        try {
+          for (const n of pendingNumbers) {
+            setAiBusyNumber(n)
+            const { data: d, error: err } = await supabase.functions.invoke(
+              'grade-with-ai',
+              { body: { session_id: sessionId, question_number: n } },
+            )
+            if (err) throw new Error(err.message || 'AI 호출 실패')
+            if (d?.error) throw new Error(`${n}번: ${d.error}`)
+          }
+          await load()
+        } catch (e) {
+          setError(e.message)
+        } finally {
+          setBatchBusy(false)
+          setAiBusyNumber(null)
+        }
+      },
+    )
+
+  if (loading) {
+    return (
+      <div className="min-h-full flex items-center justify-center text-gray-400 text-sm">
+        불러오는 중…
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-full flex flex-col p-6 bg-white gap-5">
+        <Link to={`/teacher/exams/${examId}/results`} className="text-sm text-gray-500">
+          ← 응시 목록
+        </Link>
+        <p className="text-sm text-red-600 bg-red-50 rounded-lg p-3 break-all">
+          {error || '세션을 찾을 수 없습니다.'}
+        </p>
+      </div>
+    )
+  }
+
+  const { student, session, exam } = data
+  const results = Array.isArray(session.results) ? session.results : []
+  const pct = session.maxScore > 0 ? Math.round((session.score / session.maxScore) * 100) : 0
+
+  const pending = results.filter((r) => r.isCorrect === null || r.isCorrect === undefined)
+  const graded = results.filter((r) => r.isCorrect === true || r.isCorrect === false)
+  const pendingNumbers = pending.map((r) => r.number)
+
+  return (
+    <div className="min-h-full flex flex-col bg-white">
+      <header className="flex items-center justify-between p-4 border-b border-gray-200">
+        <Link to={`/teacher/exams/${examId}/results`} className="text-sm text-gray-500">
+          ← 응시 목록
+        </Link>
+        <h2 className="text-base font-bold truncate px-2">{exam.subject} · {exam.unit}</h2>
+        <span className="w-12" />
+      </header>
+
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        {error && (
+          <div className="rounded-lg bg-red-50 text-red-700 text-sm p-3 break-all">{error}</div>
+        )}
+
+        {/* 학생 + 총점 */}
+        <div className="rounded-2xl border border-gray-200 p-4 flex items-center gap-4">
+          <span className="shrink-0 w-12 h-12 rounded-full bg-teacher text-white text-lg font-bold flex items-center justify-center">
+            {student.number}
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-gray-900">{student.name}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {session.submitted ? '제출 완료' : '미제출'}
+            </p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-2xl font-bold text-teacher">
+              {session.score ?? 0}
+              <span className="text-sm text-gray-400">/{session.maxScore ?? 0}</span>
+            </p>
+            <p className="text-xs text-gray-400">{pct}%</p>
+          </div>
+        </div>
+
+        {pending.length > 0 && (
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-amber-800">📝 채점 대기</h3>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
+                {pending.length}문항
+              </span>
+              <button
+                type="button"
+                disabled={batchBusy || pendingNumbers.length === 0}
+                onClick={() => requestBatchAi(pendingNumbers)}
+                className="ml-auto px-3 py-1.5 rounded-lg text-xs font-bold bg-teacher text-white disabled:opacity-50"
+              >
+                {batchBusy ? 'AI 채점 중…' : '🤖 전체 AI 채점'}
+              </button>
+            </div>
+            {pending.map((r) => (
+              <QuestionGradeCard
+                key={r.number}
+                r={r}
+                saving={savingNumber === r.number}
+                aiBusy={aiBusyNumber === r.number}
+                onSaveScore={(fs) => saveScore(r.number, fs)}
+                onRequestAi={() => requestAi(r.number)}
+              />
+            ))}
+          </section>
+        )}
+
+        {graded.length > 0 && (
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-bold text-gray-700">채점 완료</h3>
+            {graded.map((r) => (
+              <QuestionGradeCard
+                key={r.number}
+                r={r}
+                saving={savingNumber === r.number}
+                aiBusy={aiBusyNumber === r.number}
+                onSaveScore={(fs) => saveScore(r.number, fs)}
+                onRequestAi={() => requestAi(r.number)}
+              />
+            ))}
+          </section>
+        )}
+      </div>
+
+      {/* AI 비용 확인 모달 */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl flex flex-col gap-4">
+            <h3 className="text-lg font-bold text-gray-900">AI 채점</h3>
+            <p className="text-sm text-gray-700 leading-relaxed">{confirmModal.message}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold"
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className="flex-1 py-3 rounded-xl bg-teacher text-white text-sm font-bold shadow"
+              >
+                계속
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function QuestionGradeCard({ r, saving, aiBusy, onSaveScore, onRequestAi }) {
+  const isPending = r.isCorrect === null || r.isCorrect === undefined
+  const isAuto = r.autoGraded !== false
+  const points = r.points ?? 0
+  const currentScore =
+    typeof r.finalScore === 'number'
+      ? r.finalScore
+      : r.isCorrect === true
+        ? points
+        : r.isCorrect === false
+          ? 0
+          : null
+
+  const bg = isPending
+    ? 'border-amber-300 bg-amber-50/60'
+    : r.isCorrect === true
+      ? 'border-green-200 bg-green-50/50'
+      : 'border-red-200 bg-red-50/50'
+
+  const badge = isPending
+    ? { cls: 'bg-amber-400 text-white', text: '대기' }
+    : r.isCorrect === true
+      ? { cls: 'bg-green-500 text-white', text: 'O' }
+      : { cls: 'bg-red-500 text-white', text: 'X' }
+
+  return (
+    <div className={`rounded-xl border p-3 flex flex-col gap-2 ${bg}`}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${badge.cls}`}>
+          {badge.text}
+        </span>
+        <span className="text-sm font-bold text-gray-800">{r.number}번</span>
+        <span className="text-xs text-gray-400">{points}점</span>
+        {r.teacherModified && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-teacher/10 text-teacher font-semibold">
+            교사 수정
+          </span>
+        )}
+        {!isAuto && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">
+            수동 채점
+          </span>
+        )}
+        <span className="ml-auto text-xs font-bold text-gray-500">
+          +{typeof currentScore === 'number' ? currentScore : 0}점
+        </span>
+      </div>
+
+      <div className="text-xs text-gray-700 pl-9 flex flex-col gap-0.5">
+        <p>학생 답: <span className="font-medium whitespace-pre-wrap">{r.studentAnswer || '(미작성)'}</span></p>
+        <p className="text-gray-500">정답: {r.correctAnswer || '(없음)'}</p>
+      </div>
+
+      {!isAuto ? (
+        <ManualGradeControls
+          r={r}
+          points={points}
+          currentScore={currentScore}
+          saving={saving}
+          aiBusy={aiBusy}
+          onSaveScore={onSaveScore}
+          onRequestAi={onRequestAi}
+        />
+      ) : (
+        <AutoGradeToggle
+          currentScore={currentScore}
+          points={points}
+          saving={saving}
+          onSaveScore={onSaveScore}
+        />
+      )}
+    </div>
+  )
+}
+
+function AutoGradeToggle({ currentScore, points, saving, onSaveScore }) {
+  const isRight = currentScore === points && points > 0
+  const isWrong = currentScore === 0
+  return (
+    <div className="pl-9 flex gap-2 pt-1">
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => onSaveScore(points)}
+        className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+          isRight
+            ? 'bg-green-600 text-white border-green-600'
+            : 'bg-white text-green-700 border-green-300 hover:bg-green-50'
+        } disabled:opacity-50`}
+      >
+        ✅ 정답 처리
+      </button>
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => onSaveScore(0)}
+        className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+          isWrong
+            ? 'bg-red-600 text-white border-red-600'
+            : 'bg-white text-red-700 border-red-300 hover:bg-red-50'
+        } disabled:opacity-50`}
+      >
+        ❌ 오답 처리
+      </button>
+    </div>
+  )
+}
+
+function ManualGradeControls({
+  r,
+  points,
+  currentScore,
+  saving,
+  aiBusy,
+  onSaveScore,
+  onRequestAi,
+}) {
+  const [pickedScore, setPickedScore] = useState(null)
+  const aiScore = typeof r.aiSuggestedScore === 'number' ? r.aiSuggestedScore : null
+  const aiReasoning = r.aiReasoning || ''
+
+  // 표시 점수: 교사가 방금 선택한 값 → finalScore → aiSuggested → null
+  const displayScore =
+    pickedScore != null
+      ? pickedScore
+      : typeof currentScore === 'number'
+        ? currentScore
+        : aiScore
+
+  return (
+    <div className="pl-9 flex flex-col gap-2 pt-1">
+      {aiScore == null && !aiBusy && (
+        <button
+          type="button"
+          disabled={aiBusy || saving}
+          onClick={onRequestAi}
+          className="self-start px-3 py-2 rounded-lg text-xs font-bold bg-white border border-teacher text-teacher hover:bg-teacher/5 disabled:opacity-50"
+        >
+          🤖 AI 채점 요청
+        </button>
+      )}
+      {aiBusy && (
+        <div className="text-xs text-teacher">AI가 채점 중…</div>
+      )}
+
+      {aiScore != null && (
+        <div className="rounded-lg bg-white border border-gray-200 p-2.5 flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-teacher">🤖 AI 채점 제안</span>
+            <span className="text-xs text-gray-500">
+              {aiScore}/{points}점
+            </span>
+            <button
+              type="button"
+              disabled={aiBusy || saving}
+              onClick={onRequestAi}
+              className="ml-auto text-[10px] px-2 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50"
+            >
+              다시 요청
+            </button>
+          </div>
+          {aiReasoning && (
+            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+              {aiReasoning}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 점수 picker */}
+      <div className="flex flex-wrap gap-1.5">
+        {Array.from({ length: points + 1 }).map((_, i) => {
+          const picked = displayScore === i
+          const isAiSuggestion = aiScore === i
+          return (
+            <button
+              key={i}
+              type="button"
+              disabled={saving || aiBusy}
+              onClick={() => setPickedScore(i)}
+              className={`w-9 h-9 rounded-lg text-sm font-bold border transition-colors disabled:opacity-50 ${
+                picked
+                  ? 'bg-teacher text-white border-teacher'
+                  : isAiSuggestion
+                    ? 'bg-teacher/10 text-teacher border-teacher'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-teacher/40'
+              }`}
+              title={isAiSuggestion ? 'AI 제안' : undefined}
+            >
+              {i}
+            </button>
+          )
+        })}
+      </div>
+
+      <button
+        type="button"
+        disabled={saving || aiBusy || displayScore == null}
+        onClick={() => {
+          const fs = displayScore
+          if (fs == null) return
+          setPickedScore(null)
+          onSaveScore(fs)
+        }}
+        className="mt-1 px-4 py-2 rounded-lg text-sm font-bold bg-teacher text-white shadow disabled:opacity-50"
+      >
+        {saving ? '저장 중…' : '채점 확정'}
+      </button>
+    </div>
+  )
+}

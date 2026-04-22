@@ -116,6 +116,12 @@ export default function ExamsList() {
                   {e.question_count}문항 · 응시 {e.session_count}명 · {formatDate(e.created_at)}
                 </p>
               </div>
+              <Link
+                to={`/teacher/exams/${e.id}/results`}
+                className="shrink-0 px-3 py-1.5 rounded-lg text-xs text-teacher border border-teacher/30 hover:bg-teacher/10"
+              >
+                결과
+              </Link>
               <button
                 onClick={() => setConfirmTarget(e)}
                 className="shrink-0 px-3 py-1.5 rounded-lg text-xs text-red-600 border border-red-200 hover:bg-red-50"

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase.js'
 import { useStudent } from '../../context/StudentContext.jsx'
 import { getSymbols } from '../../lib/optionStyle.js'
 import { getButtonSymbols } from '../../lib/inputButtons.js'
+import { splitFractionInput, joinFractionInput } from '../../lib/fraction.js'
 
 const STORAGE_PREFIX = 'siheombom.session'
 
@@ -393,7 +394,9 @@ export default function TakeExam() {
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-bold text-gray-700">{r.number}번</span>
                     {r.isCorrect === null ? (
-                      <p className="text-xs text-amber-600 mt-0.5">서술형 — 채점 대기</p>
+                      <p className="text-xs text-amber-600 mt-0.5">
+                        📝 선생님이 채점합니다
+                      </p>
                     ) : (
                       <div className="text-xs mt-0.5">
                         <p className={r.isCorrect ? 'text-green-700' : 'text-red-600'}>
@@ -543,6 +546,16 @@ export default function TakeExam() {
                 </span>
                 <span className="text-xs text-gray-400">{currentQ.points}점</span>
               </div>
+
+              {/* ── 답 순서 안내 ── */}
+              {(currentQ.sub_count ?? 1) > 1 &&
+                currentQ.answer_order_hint?.trim() &&
+                currentQ.type !== 'multiple_choice' && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800 flex items-start gap-2">
+                    <span className="shrink-0">💡</span>
+                    <span>{currentQ.answer_order_hint}</span>
+                  </div>
+                )}
 
               {/* ── 답 입력 UI ── */}
               <AnswerInput
@@ -707,6 +720,16 @@ function AnswerInput({ question, value, onChange }) {
       </div>
     ) : null
 
+  if (question.type === 'matching') {
+    return (
+      <MatchingInput
+        count={question.match_count ?? 3}
+        value={value}
+        onChange={onChange}
+      />
+    )
+  }
+
   if (question.type === 'multiple_choice') {
     const symbols = getSymbols(question.option_style, question.option_count)
     const selected = new Set(
@@ -753,6 +776,97 @@ function AnswerInput({ question, value, onChange }) {
   }
 
   if (question.type === 'essay') {
+    const essayMode = question.essay_mode || 'general'
+
+    if (essayMode === 'math') {
+      let parsed = { process: '', answer: '' }
+      if (value) {
+        try {
+          const j = JSON.parse(value)
+          if (j && typeof j === 'object') {
+            parsed = { process: j.process || '', answer: j.answer || '' }
+          }
+        } catch {
+          // 구 데이터 호환: plain string은 process로 취급
+          parsed = { process: value, answer: '' }
+        }
+      }
+
+      const setField = (key, v) => {
+        onChange(JSON.stringify({ ...parsed, [key]: v }))
+      }
+
+      const mathSymbols = ['×', '÷', '+', '-', '=', '(', ')', '°']
+      const insertMathSymbol = (s) => {
+        const active = activeRef.current
+        if (active && active.partIdx === 'process-math') {
+          const el = active.el
+          const start = el.selectionStart ?? el.value.length
+          const end = el.selectionEnd ?? el.value.length
+          const cur = el.value ?? ''
+          const nextVal = cur.slice(0, start) + s + cur.slice(end)
+          setField('process', nextVal)
+          requestAnimationFrame(() => {
+            el.focus()
+            el.selectionStart = el.selectionEnd = start + s.length
+          })
+        } else {
+          setField('process', (parsed.process || '') + s)
+        }
+      }
+
+      return (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <div className="text-xs font-semibold text-gray-600">풀이 과정</div>
+            <div className="flex flex-wrap gap-1.5">
+              {mathSymbols.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => insertMathSymbol(s)}
+                  className="min-w-[40px] h-10 px-2 rounded-lg bg-gray-100 text-gray-700 text-base font-medium hover:bg-gray-200 active:bg-gray-300"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={parsed.process}
+              onChange={(e) => setField('process', e.target.value)}
+              onFocus={(e) => {
+                activeRef.current = { el: e.target, partIdx: 'process-math' }
+              }}
+              rows={5}
+              placeholder="풀이 과정을 작성하세요"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm leading-relaxed focus:outline-none focus:border-student resize-none"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <div className="text-xs font-semibold text-gray-600">답</div>
+            <div className="flex items-center gap-2">
+              <input
+                value={parsed.answer}
+                onChange={(e) => setField('answer', e.target.value)}
+                onFocus={(e) => {
+                  activeRef.current = { el: e.target, partIdx: 'answer-math' }
+                }}
+                placeholder="답을 입력하세요"
+                className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-student"
+              />
+              {question.answer_unit && (
+                <span className="text-base font-semibold text-gray-700 shrink-0">
+                  {question.answer_unit}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // 일반 서술형
     return (
       <div className="flex flex-col gap-2">
         <ButtonBar />
@@ -763,9 +877,34 @@ function AnswerInput({ question, value, onChange }) {
             activeRef.current = { el: e.target, partIdx: null }
           }}
           rows={5}
-          placeholder="풀이과정과 답을 작성해주세요…"
+          placeholder="답을 작성하세요"
           className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm leading-relaxed focus:outline-none focus:border-student resize-none"
         />
+      </div>
+    )
+  }
+
+  // short_answer → 분수 UI 분기
+  if (question.answer_format === 'fraction') {
+    const parts = (value || '').split(',').map((s) => s.trim())
+    while (parts.length < subCount) parts.push('')
+
+    const updatePart = (idx, v) => {
+      const next = [...parts]
+      next[idx] = v
+      onChange(next.slice(0, subCount).join(', '))
+    }
+
+    return (
+      <div className="flex flex-col gap-3">
+        {parts.slice(0, subCount).map((part, idx) => (
+          <FractionStudentInput
+            key={idx}
+            label={subCount > 1 ? `(${idx + 1})` : null}
+            value={part}
+            onChange={(v) => updatePart(idx, v)}
+          />
+        ))}
       </div>
     )
   }
@@ -819,6 +958,165 @@ function AnswerInput({ question, value, onChange }) {
         autoComplete="off"
         className="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-center text-lg font-medium focus:outline-none focus:border-student"
       />
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════
+//  연결형 입력 (학생용)
+// ═══════════════════════════════════════════
+
+const CIRCLED = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩']
+
+function MatchingInput({ count, value, onChange }) {
+  const n = Math.max(2, Math.min(10, count || 3))
+  const parts = (value || '').split(',').map((s) => s.trim())
+  while (parts.length < n) parts.push('')
+
+  // 중복 선택된 값: 같은 오른쪽 번호를 2개 이상이 가리키면 경고
+  const countMap = new Map()
+  parts.slice(0, n).forEach((v) => {
+    if (!v) return
+    countMap.set(v, (countMap.get(v) || 0) + 1)
+  })
+  const dupSet = new Set(
+    [...countMap.entries()].filter(([, c]) => c > 1).map(([v]) => v),
+  )
+
+  const update = (idx, v) => {
+    const next = [...parts]
+    next[idx] = v
+    onChange(next.slice(0, n).join(','))
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800 flex items-start gap-2">
+        <span className="shrink-0">💡</span>
+        <span>왼쪽 항목에 맞는 오른쪽 번호를 선택하세요</span>
+      </div>
+
+      {Array.from({ length: n }).map((_, i) => {
+        const cur = parts[i] || ''
+        const isDup = cur && dupSet.has(cur)
+        return (
+          <div key={i} className="flex items-center gap-3">
+            <span className="shrink-0 text-base font-bold text-gray-700 w-16">
+              왼쪽 {CIRCLED[i]}
+            </span>
+            <span className="text-gray-400">→</span>
+            <select
+              value={cur}
+              onChange={(e) => update(i, e.target.value)}
+              className={`flex-1 border-2 rounded-xl px-3 py-3 text-base font-medium focus:outline-none ${
+                isDup
+                  ? 'border-red-400 bg-red-50 text-red-700'
+                  : cur
+                    ? 'border-student bg-white text-student'
+                    : 'border-gray-200 bg-white text-gray-500'
+              }`}
+            >
+              <option value="">선택</option>
+              {Array.from({ length: n }).map((_, j) => (
+                <option key={j} value={String(j + 1)}>
+                  {CIRCLED[j]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )
+      })}
+
+      {dupSet.size > 0 && (
+        <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
+          이미 선택된 번호입니다. 서로 다른 번호를 고르세요.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════
+//  분수 전용 입력 (학생용)
+// ═══════════════════════════════════════════
+
+function FractionStudentInput({ label, value, onChange }) {
+  const detected = /\s/.test((value || '').trim())
+  const [isMixed, setIsMixed] = useState(detected)
+  const { whole, num, den } = splitFractionInput(value)
+
+  const setField = (patch) => {
+    const next = joinFractionInput({ whole, num, den, ...patch }, isMixed)
+    onChange(next)
+  }
+
+  const toggleMixed = (mixed) => {
+    setIsMixed(mixed)
+    if (!mixed) {
+      onChange(joinFractionInput({ whole: '', num, den }, false))
+    } else {
+      onChange(joinFractionInput({ whole, num, den }, true))
+    }
+  }
+
+  const fieldCls =
+    'w-16 h-12 border-2 border-gray-200 rounded-lg text-center text-xl font-bold focus:outline-none focus:border-student'
+
+  return (
+    <div className="flex flex-col gap-2">
+      {label && <span className="text-xs text-gray-500">{label}</span>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => toggleMixed(false)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+            !isMixed ? 'bg-student text-white' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          분수
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleMixed(true)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+            isMixed ? 'bg-student text-white' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          대분수
+        </button>
+      </div>
+
+      <div className="flex items-center gap-3">
+        {isMixed && (
+          <input
+            type="number"
+            inputMode="numeric"
+            value={whole}
+            onChange={(e) => setField({ whole: e.target.value })}
+            placeholder="정수"
+            className={`${fieldCls} self-center`}
+          />
+        )}
+        <div className="inline-flex flex-col items-center">
+          <input
+            type="number"
+            inputMode="numeric"
+            value={num}
+            onChange={(e) => setField({ num: e.target.value })}
+            placeholder="분자"
+            className={fieldCls}
+          />
+          <div className="w-20 h-0.5 bg-gray-500 my-1" />
+          <input
+            type="number"
+            inputMode="numeric"
+            value={den}
+            onChange={(e) => setField({ den: e.target.value })}
+            placeholder="분모"
+            className={fieldCls}
+          />
+        </div>
+      </div>
     </div>
   )
 }
