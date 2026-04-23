@@ -346,6 +346,32 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
             </label>
           )}
 
+          {q.type === 'short_answer' &&
+            (q.sub_count ?? 1) === 1 &&
+            (q.answer_format || 'text') !== 'fraction' && (
+              <label
+                className={`flex items-start gap-2 text-sm rounded-lg px-3 py-2 border ${
+                  q.order_sensitive
+                    ? 'bg-blue-50 border-blue-200 text-blue-800'
+                    : 'bg-gray-50 border-gray-200 text-gray-700'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={q.order_sensitive === true}
+                  onChange={(e) => update({ order_sensitive: e.target.checked })}
+                  className="w-4 h-4 mt-0.5 accent-teacher"
+                />
+                <span className="flex-1">
+                  순서대로 채점
+                  <span className="block text-[10px] text-gray-500 mt-0.5">
+                    체크 시 답의 순서가 일치해야 정답 (예: "ㄱ, ㄷ, ㄴ").
+                    체크 안 하면 순서 무관 (Set 비교)
+                  </span>
+                </span>
+              </label>
+            )}
+
           {(q.sub_count ?? 1) > 1 && q.type !== 'multiple_choice' && (
             <AnswerOrderHintInput
               value={q.answer_order_hint || ''}

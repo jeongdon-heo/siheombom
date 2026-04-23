@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase.js'
 import { useStudent } from '../../context/StudentContext.jsx'
 import { getSymbols } from '../../lib/optionStyle.js'
-import { getButtonSymbols } from '../../lib/inputButtons.js'
+import { getButtonSymbols, isClearable } from '../../lib/inputButtons.js'
 import { splitFractionInput, joinFractionInput } from '../../lib/fraction.js'
 
 const STORAGE_PREFIX = 'siheombom.session'
@@ -668,6 +668,44 @@ function AnswerInput({ question, value, onChange }) {
 
   const subCount = question.sub_count ?? 1
   const buttonSymbols = getButtonSymbols(question.input_buttons)
+  const showClear = isClearable(question.input_buttons)
+
+  // 활성 입력 칸에서 마지막 한 글자 삭제. 활성칸이 없으면 단일 입력의 끝 글자 삭제.
+  const backspace = () => {
+    const active = activeRef.current
+    if (active) {
+      const { el, partIdx } = active
+      const start = el.selectionStart ?? el.value.length
+      const end = el.selectionEnd ?? el.value.length
+      const cur = el.value ?? ''
+      // 선택 범위가 있으면 그 부분 삭제, 없으면 커서 직전 한 글자 삭제
+      const delStart = start === end ? Math.max(0, start - 1) : start
+      const nextPart = cur.slice(0, delStart) + cur.slice(end)
+
+      if (partIdx == null || typeof partIdx !== 'number') {
+        onChange(nextPart)
+      } else {
+        const parts = (valueRef.current || '').split(',').map((s) => s.trim())
+        while (parts.length < subCount) parts.push('')
+        parts[partIdx] = nextPart
+        onChange(parts.join(', '))
+      }
+      requestAnimationFrame(() => {
+        el.focus()
+        el.selectionStart = el.selectionEnd = delStart
+      })
+      return
+    }
+    // 포커스 없음 → 첫 입력칸의 마지막 글자 삭제
+    if (subCount > 1) {
+      const parts = (valueRef.current || '').split(',').map((s) => s.trim())
+      while (parts.length < subCount) parts.push('')
+      parts[0] = (parts[0] || '').slice(0, -1)
+      onChange(parts.join(', '))
+    } else {
+      onChange((valueRef.current ?? '').slice(0, -1))
+    }
+  }
 
   const insertSymbol = (symbol) => {
     const active = activeRef.current
@@ -706,9 +744,9 @@ function AnswerInput({ question, value, onChange }) {
   const ButtonBar = () =>
     buttonSymbols.length > 0 ? (
       <div className="flex flex-wrap gap-1.5">
-        {buttonSymbols.map((s) => (
+        {buttonSymbols.map((s, i) => (
           <button
-            key={s}
+            key={`${s}-${i}`}
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => insertSymbol(s)}
@@ -717,6 +755,16 @@ function AnswerInput({ question, value, onChange }) {
             {s}
           </button>
         ))}
+        {showClear && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={backspace}
+            className="min-w-[56px] h-10 px-2 rounded-lg bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-100 active:bg-red-200"
+          >
+            ← 지우기
+          </button>
+        )}
       </div>
     ) : null
 

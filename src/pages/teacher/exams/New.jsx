@@ -180,6 +180,7 @@ export default function NewExam() {
           answer_order_hint: '',
           match_count: 3,
           manual_grading: false,
+          order_sensitive: false,
           essay_mode: 'general',
           answer_unit: '',
           example_solution: '',
@@ -222,6 +223,7 @@ export default function NewExam() {
         answer_order_hint: '',
         match_count: 3,
         manual_grading: false,
+        order_sensitive: false,
         essay_mode: 'general',
         answer_unit: '',
         example_solution: '',
@@ -372,6 +374,11 @@ export default function NewExam() {
               q.manual_grading === true ||
               (typeof q.correct_answer === 'string' &&
                 q.correct_answer.trim().startsWith('(예)')),
+            order_sensitive:
+              q.type === 'short_answer' &&
+              (q.sub_count ?? 1) === 1 &&
+              (q.answer_format || 'text') !== 'fraction' &&
+              q.order_sensitive === true,
             essay_mode:
               q.type === 'essay'
                 ? (['general', 'math'].includes(q.essay_mode) ? q.essay_mode : 'general')
