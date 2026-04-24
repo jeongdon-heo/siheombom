@@ -175,7 +175,7 @@ export default function NewExam() {
           correct_answer: q.correct_answer ?? '',
           option_count: optionCount,
           option_style: 'number_circle',
-          input_buttons: 'none',
+          input_buttons: [],
           answer_format: 'text',
           answer_order_hint: '',
           match_count: 3,
@@ -218,7 +218,7 @@ export default function NewExam() {
         correct_answer: '',
         option_count: 5,
         option_style: 'number_circle',
-        input_buttons: 'none',
+        input_buttons: [],
         answer_format: 'text',
         answer_order_hint: '',
         match_count: 3,
@@ -361,7 +361,9 @@ export default function NewExam() {
             option_style:
               q.type === 'multiple_choice' ? (q.option_style || 'number_circle') : 'number_circle',
             input_buttons:
-              q.type === 'multiple_choice' ? 'none' : (q.input_buttons || 'none'),
+              q.type === 'multiple_choice'
+                ? []
+                : (Array.isArray(q.input_buttons) ? q.input_buttons : []),
             answer_format:
               q.type === 'short_answer' ? (q.answer_format || 'text') : 'text',
             answer_order_hint:

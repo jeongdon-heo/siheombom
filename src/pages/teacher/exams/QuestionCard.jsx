@@ -318,18 +318,31 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
           )}
 
           {(q.type === 'short_answer' || q.type === 'essay') && (
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-xs text-gray-500">입력 보조 버튼</span>
-              <select
-                value={q.input_buttons || 'none'}
-                onChange={(e) => update({ input_buttons: e.target.value })}
-                className="border border-gray-300 rounded px-2 py-2"
-              >
-                {Object.entries(INPUT_BUTTON_SETS).map(([key, { label }]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
-            </label>
+            <div className="flex flex-col gap-1 text-sm">
+              <span className="text-xs text-gray-500">입력 보조 버튼 (복수 선택)</span>
+              <div className="flex flex-col gap-1 border border-gray-300 rounded px-2 py-2 bg-white">
+                {Object.entries(INPUT_BUTTON_SETS).map(([key, { label, hint }]) => {
+                  const selected = Array.isArray(q.input_buttons) ? q.input_buttons : []
+                  const checked = selected.includes(key)
+                  return (
+                    <label key={key} className="flex items-center gap-2 cursor-pointer py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...selected.filter((k) => k !== key), key]
+                            : selected.filter((k) => k !== key)
+                          update({ input_buttons: next })
+                        }}
+                      />
+                      <span className="text-gray-800">{label}</span>
+                      {hint && <span className="text-xs text-gray-400">({hint})</span>}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
           )}
 
           {q.type === 'short_answer' && (
@@ -450,6 +463,10 @@ const ORDER_HINT_PRESETS = [
 ]
 
 function AnswerOrderHintInput({ value, onChange }) {
+  const appendPreset = (p) => {
+    const cur = (value ?? '').trim()
+    onChange(cur ? `${cur}, ${p}` : p)
+  }
   return (
     <div className="flex flex-col gap-1 text-sm">
       <span className="text-xs text-gray-500">답 순서 안내 (학생 화면에 표시)</span>
@@ -464,12 +481,21 @@ function AnswerOrderHintInput({ value, onChange }) {
           <button
             key={p}
             type="button"
-            onClick={() => onChange(p)}
+            onClick={() => appendPreset(p)}
             className="px-2 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs hover:bg-gray-200"
           >
-            {p}
+            + {p}
           </button>
         ))}
+        {(value ?? '').length > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="px-2 py-1 rounded-lg bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100"
+          >
+            지우기
+          </button>
+        )}
       </div>
     </div>
   )
