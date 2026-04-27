@@ -8,6 +8,10 @@ import NewExam from './pages/teacher/exams/New.jsx'
 import ExamsList from './pages/teacher/exams/List.jsx'
 import ResultsList from './pages/teacher/exams/ResultsList.jsx'
 import SessionDetail from './pages/teacher/exams/SessionDetail.jsx'
+import ResultsIndex from './pages/teacher/results/Index.jsx'
+import ResultsExam from './pages/teacher/results/Exam.jsx'
+import ResultsStudent from './pages/teacher/results/Student.jsx'
+import StudentHistory from './pages/teacher/results/StudentHistory.jsx'
 import ClassCodeEntry from './pages/student/ClassCodeEntry.jsx'
 import NameNumberEntry from './pages/student/NameNumberEntry.jsx'
 import ExamList from './pages/student/ExamList.jsx'
@@ -84,6 +88,38 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <SessionDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/results"
+            element={
+              <ProtectedRoute>
+                <ResultsIndex />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/results/:examId"
+            element={
+              <ProtectedRoute>
+                <ResultsExam />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/results/:examId/:studentId"
+            element={
+              <ProtectedRoute>
+                <ResultsStudent />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/students/:studentId"
+            element={
+              <ProtectedRoute>
+                <StudentHistory />
               </ProtectedRoute>
             }
           />

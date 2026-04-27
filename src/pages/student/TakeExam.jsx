@@ -135,6 +135,7 @@ export default function TakeExam() {
             score: sessRow.score,
             maxScore: sessRow.max_score,
             results: sessRow.results ?? [],
+            aiFeedback: sessRow.ai_feedback ?? null,
           })
           setLoading(false)
           return
@@ -344,6 +345,9 @@ export default function TakeExam() {
               {student.name}
             </p>
           </div>
+
+          {/* 💌 선생님의 한 마디 */}
+          <FeedbackPanel feedback={result.aiFeedback} />
 
           {/* 요약 카드 */}
           {items.length > 0 && (
@@ -1007,6 +1011,36 @@ function AnswerInput({ question, value, onChange }) {
         className="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-center text-lg font-medium focus:outline-none focus:border-student"
       />
     </div>
+  )
+}
+
+// ═══════════════════════════════════════════
+//  선생님의 한 마디 (학생 결과 화면)
+// ═══════════════════════════════════════════
+
+function FeedbackPanel({ feedback }) {
+  return (
+    <section
+      className={`rounded-2xl border p-4 flex flex-col gap-2 ${
+        feedback
+          ? 'border-student/30 bg-student/5'
+          : 'border-gray-200 bg-gray-50'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-base">💌</span>
+        <h3 className="text-sm font-bold text-gray-800">선생님의 한 마디</h3>
+      </div>
+      {feedback ? (
+        <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+          {feedback}
+        </p>
+      ) : (
+        <p className="text-sm text-gray-500 leading-relaxed">
+          선생님이 확인 후 피드백을 작성해 주실 거예요.
+        </p>
+      )}
+    </section>
   )
 }
 

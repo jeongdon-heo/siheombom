@@ -1,9 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase.js'
+import { generateFeedback as aiGenerateFeedback } from '../../../lib/ai.js'
+import { useAuth } from '../../../context/AuthContext.jsx'
 
-export default function SessionDetail() {
-  const { examId, sessionId } = useParams()
+export default function SessionDetail({
+  sessionId: sessionIdProp,
+  backTo: backToProp,
+  backLabel: backLabelProp,
+} = {}) {
+  const params = useParams()
+  const { teacher } = useAuth()
+  const sessionId = sessionIdProp ?? params.sessionId
+  const examId = params.examId
+  const backTo = backToProp ?? `/teacher/exams/${examId}/results`
+  const backLabel = backLabelProp ?? '← 응시 목록'
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -12,6 +23,7 @@ export default function SessionDetail() {
   const [batchBusy, setBatchBusy] = useState(false)
   const [aiConfirmed, setAiConfirmed] = useState(false)
   const [confirmModal, setConfirmModal] = useState(null) // { message, onConfirm }
+  const [feedbackBusy, setFeedbackBusy] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -96,6 +108,63 @@ export default function SessionDetail() {
   const requestAi = (number) =>
     confirmAi('이 문항을 AI로 채점할까요? Claude API가 호출됩니다.', () => callAi(number))
 
+  const generateFeedback = async () => {
+    setFeedbackBusy(true)
+    setError(null)
+    try {
+      if (!teacher?.api_key_encrypted || !teacher?.provider) {
+        throw new Error('설정에서 AI 공급자와 API 키를 먼저 저장해주세요.')
+      }
+      if (!data?.session || !data?.student || !data?.exam) {
+        throw new Error('세션 데이터가 비어있습니다.')
+      }
+      // 학습 목표를 포함한 요약을 RPC로 받아와서 더 나은 분석 생성
+      const { data: summary, error: sErr } = await supabase.rpc(
+        'get_session_summary_for_ai',
+        { session_id_in: sessionId },
+      )
+      if (sErr) throw new Error(sErr.message)
+      if (!summary) throw new Error('세션 요약을 불러오지 못했습니다.')
+
+      const { studentFeedback, teacherAnalysis } = await aiGenerateFeedback({
+        provider: teacher.provider,
+        apiKey: teacher.api_key_encrypted,
+        summary,
+      })
+      const { error: saveErr } = await supabase.rpc('save_session_feedback', {
+        session_id_in: sessionId,
+        student_feedback_in: studentFeedback,
+        teacher_analysis_in: teacherAnalysis,
+      })
+      if (saveErr) throw new Error(saveErr.message)
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              session: {
+                ...prev.session,
+                aiFeedback: studentFeedback,
+                aiTeacherAnalysis: teacherAnalysis,
+                aiFeedbackAt: new Date().toISOString(),
+              },
+            }
+          : prev,
+      )
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setFeedbackBusy(false)
+    }
+  }
+
+  const requestFeedback = (regen) =>
+    confirmAi(
+      regen
+        ? '선생님의 한 마디를 다시 생성합니다. Claude API가 호출됩니다.'
+        : '이 학생의 시험 결과로 "선생님의 한 마디"를 생성합니다. Claude API가 호출됩니다.',
+      generateFeedback,
+    )
+
   const requestBatchAi = (pendingNumbers) =>
     confirmAi(
       `채점 대기 ${pendingNumbers.length}문항을 AI로 일괄 채점합니다. Claude API가 ${pendingNumbers.length}회 호출됩니다.`,
@@ -133,8 +202,8 @@ export default function SessionDetail() {
   if (!data) {
     return (
       <div className="min-h-full flex flex-col p-6 bg-white gap-5">
-        <Link to={`/teacher/exams/${examId}/results`} className="text-sm text-gray-500">
-          ← 응시 목록
+        <Link to={backTo} className="text-sm text-gray-500">
+          {backLabel}
         </Link>
         <p className="text-sm text-red-600 bg-red-50 rounded-lg p-3 break-all">
           {error || '세션을 찾을 수 없습니다.'}
@@ -154,8 +223,8 @@ export default function SessionDetail() {
   return (
     <div className="min-h-full flex flex-col bg-white">
       <header className="flex items-center justify-between p-4 border-b border-gray-200">
-        <Link to={`/teacher/exams/${examId}/results`} className="text-sm text-gray-500">
-          ← 응시 목록
+        <Link to={backTo} className="text-sm text-gray-500">
+          {backLabel}
         </Link>
         <h2 className="text-base font-bold truncate px-2">{exam.subject} · {exam.unit}</h2>
         <span className="w-12" />
@@ -185,6 +254,17 @@ export default function SessionDetail() {
             <p className="text-xs text-gray-400">{pct}%</p>
           </div>
         </div>
+
+        {/* AI 분석: 학생용 한 마디 + 교사용 학습 분석 */}
+        {session.submitted && (
+          <FeedbackSection
+            studentFeedback={session.aiFeedback}
+            teacherAnalysis={session.aiTeacherAnalysis}
+            busy={feedbackBusy}
+            disabled={pending.length > 0}
+            onRequest={requestFeedback}
+          />
+        )}
 
         {pending.length > 0 && (
           <section className="flex flex-col gap-2">
@@ -467,6 +547,135 @@ function ManualGradeControls({
       >
         {saving ? '저장 중…' : '채점 확정'}
       </button>
+    </div>
+  )
+}
+
+function FeedbackSection({
+  studentFeedback,
+  teacherAnalysis,
+  busy,
+  disabled,
+  onRequest,
+}) {
+  const has = !!(studentFeedback || teacherAnalysis)
+  return (
+    <section className="rounded-2xl border border-teacher/20 bg-teacher/5 p-4 flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <span className="text-base">🤖</span>
+        <h3 className="text-sm font-bold text-gray-800">AI 분석</h3>
+        {has ? (
+          <button
+            type="button"
+            disabled={busy || disabled}
+            onClick={() => onRequest(true)}
+            className="ml-auto text-xs px-2.5 py-1 rounded-lg border border-teacher/30 text-teacher disabled:opacity-50"
+          >
+            {busy ? '생성 중…' : '다시 생성'}
+          </button>
+        ) : (
+          !disabled && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onRequest(false)}
+              className="ml-auto px-3 py-1.5 rounded-lg text-xs font-bold bg-teacher text-white shadow disabled:opacity-50"
+            >
+              {busy ? '생성 중…' : 'AI 분석 생성'}
+            </button>
+          )
+        )}
+      </div>
+
+      {disabled && !has && (
+        <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+          채점 대기 문항을 먼저 채점한 뒤 생성해 주세요.
+        </p>
+      )}
+
+      {studentFeedback && (
+        <div className="rounded-xl bg-white border border-teacher/20 p-3 flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-base">💌</span>
+            <span className="text-xs font-bold text-gray-700">
+              선생님의 한 마디 (학생에게 보여지는 글)
+            </span>
+          </div>
+          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+            {studentFeedback}
+          </p>
+        </div>
+      )}
+
+      {teacherAnalysis && (
+        <div className="rounded-xl bg-white border border-gray-200 p-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-base">📊</span>
+            <span className="text-xs font-bold text-gray-700">AI 학습 분석 (교사용)</span>
+          </div>
+          <TeacherAnalysisRenderer text={teacherAnalysis} />
+        </div>
+      )}
+    </section>
+  )
+}
+
+function TeacherAnalysisRenderer({ text }) {
+  if (!text) return null
+  const lines = text.split('\n')
+  const blocks = []
+  let currentList = null
+
+  const flush = () => {
+    if (currentList) {
+      blocks.push({ type: 'list', items: currentList })
+      currentList = null
+    }
+  }
+
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line) {
+      flush()
+      continue
+    }
+    if (line.startsWith('- ')) {
+      if (!currentList) currentList = []
+      currentList.push(line.slice(2))
+      continue
+    }
+    flush()
+    blocks.push({ type: 'heading', text: line })
+  }
+  flush()
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {blocks.map((b, i) => {
+        if (b.type === 'heading') {
+          return (
+            <h4
+              key={i}
+              className="text-sm font-bold text-gray-800 mt-1 first:mt-0"
+            >
+              {b.text}
+            </h4>
+          )
+        }
+        return (
+          <ul key={i} className="flex flex-col gap-1 pl-1">
+            {b.items.map((item, j) => (
+              <li
+                key={j}
+                className="text-sm text-gray-700 leading-relaxed flex gap-2"
+              >
+                <span className="text-teacher shrink-0">•</span>
+                <span className="whitespace-pre-wrap">{item}</span>
+              </li>
+            ))}
+          </ul>
+        )
+      })}
     </div>
   )
 }

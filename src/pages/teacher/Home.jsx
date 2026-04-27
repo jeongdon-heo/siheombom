@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext.jsx'
 const MENU = [
   { key: 'create', label: '시험 만들기', desc: 'PDF 업로드 → AI 분석', to: '/teacher/exams/new' },
   { key: 'manage', label: '시험 관리', desc: '시험 목록·삭제', to: '/teacher/exams' },
-  { key: 'result', label: '결과 분석', desc: '학생별 응시 결과', to: null },
+  { key: 'result', label: '결과 분석', desc: '학생별 응시 결과', to: '/teacher/results' },
   { key: 'settings', label: '설정', desc: 'AI · API 키 · 학급코드', to: '/teacher/settings' },
 ]
 

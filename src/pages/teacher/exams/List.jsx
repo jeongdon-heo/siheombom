@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { supabase } from '../../../lib/supabase.js'
 
+const CONFIRM_COOLDOWN_SEC = 3
+
 function formatDate(iso) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -18,6 +20,26 @@ export default function ExamsList() {
   const [error, setError] = useState(null)
   const [confirmTarget, setConfirmTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
+
+  // 모달이 열리는 순간 3초 카운트다운 시작 (오클릭 방지)
+  useEffect(() => {
+    if (!confirmTarget) {
+      setCooldown(0)
+      return
+    }
+    setCooldown(CONFIRM_COOLDOWN_SEC)
+    const id = setInterval(() => {
+      setCooldown((c) => {
+        if (c <= 1) {
+          clearInterval(id)
+          return 0
+        }
+        return c - 1
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [confirmTarget])
 
   const fetchExams = useCallback(async () => {
     setLoading(true)
@@ -137,29 +159,39 @@ export default function ExamsList() {
       {confirmTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl flex flex-col gap-4">
-            <h3 className="text-lg font-bold text-gray-900">시험 삭제</h3>
-            <p className="text-sm text-gray-700 leading-relaxed">
-              <span className="font-semibold">{confirmTarget.subject} · {confirmTarget.unit}</span>
-              을(를) 삭제하시겠습니까?
+            <h3 className="text-lg font-bold text-gray-900">⚠️ 이 시험을 삭제하시겠습니까?</h3>
+            <dl className="text-sm text-gray-700 leading-relaxed grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+              <dt className="text-gray-500">과목</dt>
+              <dd className="font-semibold">{confirmTarget.subject}</dd>
+              <dt className="text-gray-500">단원</dt>
+              <dd className="font-semibold">{confirmTarget.unit}</dd>
+              <dt className="text-gray-500">응시 인원</dt>
+              <dd className="font-semibold">{confirmTarget.session_count}명</dd>
+            </dl>
+            <p className="text-sm text-red-600 leading-relaxed">
+              삭제하면 학생 응시 기록도 함께 삭제됩니다.
               <br />
-              <span className="text-red-600">
-                학생 응시 기록({confirmTarget.session_count}명)도 함께 삭제됩니다.
-              </span>
+              이 작업은 되돌릴 수 없습니다.
             </p>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setConfirmTarget(null)}
                 disabled={deleting}
-                className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold"
+                className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold disabled:opacity-50"
               >
                 취소
               </button>
               <button
                 onClick={() => handleDelete(confirmTarget)}
-                disabled={deleting}
+                disabled={deleting || cooldown > 0}
                 className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-bold shadow disabled:opacity-50"
               >
-                {deleting ? '삭제 중…' : '삭제'}
+                {deleting
+                  ? '삭제 중…'
+                  : cooldown > 0
+                    ? `삭제하기 (${cooldown}초)`
+                    : '삭제하기'}
               </button>
             </div>
           </div>

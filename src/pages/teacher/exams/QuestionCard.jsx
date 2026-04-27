@@ -53,7 +53,7 @@ function isValidBbox(b) {
   )
 }
 
-export default function QuestionCard({ q, onChange, onDelete, examImages, pageCount, pageIdx, pageTotal, textLayerBboxMap, textLayerPositions }) {
+export default function QuestionCard({ q, onChange, onDelete, examImages, pageCount, pageIdx, pageTotal, pointsPerQ, textLayerBboxMap, textLayerPositions }) {
   const update = (patch) => {
     const next = { ...q, ...patch }
     // 정답이 "(예)"로 시작하면 자동으로 수동 채점 체크
@@ -90,13 +90,13 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
             {TYPE_LABEL[q.type]} · p.{q.page}
           </span>
         </div>
-        <span className="text-gray-400 text-xs shrink-0">{q.expanded ? '▲' : '▼'}</span>
+        <span className="text-gray-400 text-sm shrink-0">{q.expanded ? '▲' : '▼'}</span>
       </button>
 
       {q.expanded && (
         <div className="border-t border-gray-100 p-3 flex flex-col gap-3">
           {/* 페이지 선택 + AI 자동 배치 */}
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-sm">
             <span className="text-gray-500">페이지</span>
             <select
               value={q.page}
@@ -137,7 +137,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
             </button>
           </div>
           {toastMsg && (
-            <p className="text-xs text-amber-600 bg-amber-50 rounded-lg py-1.5 px-3 text-center">
+            <p className="text-sm text-amber-600 bg-amber-50 rounded-lg py-1.5 px-3 text-center">
               {toastMsg}
             </p>
           )}
@@ -150,7 +150,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
               <button
                 type="button"
                 onClick={onClick}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   active
                     ? 'bg-teacher text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -183,13 +183,13 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
             />
           ) : (
             <div className="rounded-lg border border-gray-200 bg-gray-50 min-h-[60px] flex items-center justify-center">
-              <span className="text-xs text-gray-400 py-6">이미지 없음</span>
+              <span className="text-sm text-gray-400 py-6">이미지 없음</span>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-2 text-sm">
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-gray-500">번호</span>
+              <span className="text-sm text-gray-500">번호</span>
               <input
                 type="number"
                 min={1}
@@ -199,7 +199,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-gray-500">답칸 수</span>
+              <span className="text-sm text-gray-500">답칸 수</span>
               <input
                 type="number"
                 min={1}
@@ -212,7 +212,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
           </div>
 
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-xs text-gray-500">유형</span>
+            <span className="text-sm text-gray-500">유형</span>
             <select
               value={q.type}
               onChange={(e) => update({ type: e.target.value })}
@@ -227,7 +227,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
 
           {q.type === 'essay' && (
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-xs text-gray-500">서술형 모드</span>
+              <span className="text-sm text-gray-500">서술형 모드</span>
               <select
                 value={q.essay_mode || 'general'}
                 onChange={(e) => update({ essay_mode: e.target.value })}
@@ -255,12 +255,12 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
             <span className="flex-1">
               선생님이 채점 (자동 채점하지 않음)
               {q.type === 'essay' && (q.essay_mode || 'general') === 'math' && (
-                <span className="block text-[10px] text-gray-500 mt-0.5">
+                <span className="block text-xs text-gray-500 mt-0.5">
                   체크 안 하면 답 부분만 자동 채점, 풀이 과정은 수동/AI 채점
                 </span>
               )}
               {q.type === 'essay' && (q.essay_mode || 'general') === 'general' && (
-                <span className="block text-[10px] text-gray-500 mt-0.5">
+                <span className="block text-xs text-gray-500 mt-0.5">
                   일반 서술형은 전체 수동/AI 채점
                 </span>
               )}
@@ -270,7 +270,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
           {q.type === 'multiple_choice' && (
             <div className="grid grid-cols-2 gap-2 text-sm">
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-gray-500">보기 개수</span>
+                <span className="text-sm text-gray-500">보기 개수</span>
                 <input
                   type="number"
                   min={2}
@@ -285,7 +285,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-gray-500">보기 기호</span>
+                <span className="text-sm text-gray-500">보기 기호</span>
                 <select
                   value={q.option_style || 'number_circle'}
                   onChange={(e) => update({ option_style: e.target.value })}
@@ -301,7 +301,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
 
           {q.type === 'matching' && (
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-xs text-gray-500">연결 개수</span>
+              <span className="text-sm text-gray-500">연결 개수</span>
               <input
                 type="number"
                 min={2}
@@ -319,7 +319,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
 
           {(q.type === 'short_answer' || q.type === 'essay') && (
             <div className="flex flex-col gap-1 text-sm">
-              <span className="text-xs text-gray-500">입력 보조 버튼 (복수 선택)</span>
+              <span className="text-sm text-gray-500">입력 보조 버튼 (복수 선택)</span>
               <div className="flex flex-col gap-1 border border-gray-300 rounded px-2 py-2 bg-white">
                 {Object.entries(INPUT_BUTTON_SETS).map(([key, { label, hint }]) => {
                   const selected = Array.isArray(q.input_buttons) ? q.input_buttons : []
@@ -337,7 +337,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
                         }}
                       />
                       <span className="text-gray-800">{label}</span>
-                      {hint && <span className="text-xs text-gray-400">({hint})</span>}
+                      {hint && <span className="text-sm text-gray-400">({hint})</span>}
                     </label>
                   )
                 })}
@@ -347,7 +347,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
 
           {q.type === 'short_answer' && (
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-xs text-gray-500">답 형식</span>
+              <span className="text-sm text-gray-500">답 형식</span>
               <select
                 value={q.answer_format || 'text'}
                 onChange={(e) => update({ answer_format: e.target.value })}
@@ -377,7 +377,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
                 />
                 <span className="flex-1">
                   순서대로 채점
-                  <span className="block text-[10px] text-gray-500 mt-0.5">
+                  <span className="block text-xs text-gray-500 mt-0.5">
                     체크 시 답의 순서가 일치해야 정답 (예: "ㄱ, ㄷ, ㄴ").
                     체크 안 하면 순서 무관 (Set 비교)
                   </span>
@@ -406,13 +406,13 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
             />
           ) : q.type === 'essay' ? (
             (q.essay_mode || 'general') === 'math' ? (
-              <EssayAnswerInput q={q} update={update} />
+              <EssayAnswerInput q={q} update={update} pointsPerQ={pointsPerQ} />
             ) : (
               <GeneralEssayAnswerInput q={q} update={update} />
             )
           ) : (
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-xs text-gray-500">
+              <span className="text-sm text-gray-500">
                 정답
                 {q.type === 'multiple_choice' && ' (번호만, 복수면 쉼표로 구분)'}
                 {q.type === 'matching' && ` (왼쪽 위부터 짝 지어질 오른쪽 번호, 쉼표 구분 · 예: "2,3,1")`}
@@ -427,13 +427,13 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
                       ? '예) 2, 3, 1'
                       : ''
                 }
-                className="border border-gray-300 rounded px-2 py-2 text-sm"
+                className="border border-gray-300 rounded px-3 py-3 text-3xl font-medium"
               />
             </label>
           )}
 
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-xs text-gray-500">학습 목표</span>
+            <span className="text-sm text-gray-500">학습 목표</span>
             <input
               value={q.learning_objective}
               onChange={(e) => update({ learning_objective: e.target.value })}
@@ -444,7 +444,7 @@ export default function QuestionCard({ q, onChange, onDelete, examImages, pageCo
           <button
             type="button"
             onClick={onDelete}
-            className="self-start text-xs text-red-500 mt-2"
+            className="self-start text-sm text-red-500 mt-2"
           >
             이 문항 삭제
           </button>
@@ -469,7 +469,7 @@ function AnswerOrderHintInput({ value, onChange }) {
   }
   return (
     <div className="flex flex-col gap-1 text-sm">
-      <span className="text-xs text-gray-500">답 순서 안내 (학생 화면에 표시)</span>
+      <span className="text-sm text-gray-500">답 순서 안내 (학생 화면에 표시)</span>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -482,7 +482,7 @@ function AnswerOrderHintInput({ value, onChange }) {
             key={p}
             type="button"
             onClick={() => appendPreset(p)}
-            className="px-2 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs hover:bg-gray-200"
+            className="px-2 py-1 rounded-lg bg-gray-100 text-gray-700 text-sm hover:bg-gray-200"
           >
             + {p}
           </button>
@@ -491,7 +491,7 @@ function AnswerOrderHintInput({ value, onChange }) {
           <button
             type="button"
             onClick={() => onChange('')}
-            className="px-2 py-1 rounded-lg bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100"
+            className="px-2 py-1 rounded-lg bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-100"
           >
             지우기
           </button>
@@ -506,7 +506,7 @@ function GeneralEssayAnswerInput({ q, update }) {
   return (
     <div className="flex flex-col gap-2 border border-gray-200 rounded-lg p-3 bg-gray-50/50">
       <label className="flex flex-col gap-1">
-        <span className="text-xs text-gray-500">예시 정답 (교사/AI 채점 참고용)</span>
+        <span className="text-sm text-gray-500">예시 정답 (교사/AI 채점 참고용)</span>
         <textarea
           rows={3}
           value={q.example_solution || ''}
@@ -515,7 +515,7 @@ function GeneralEssayAnswerInput({ q, update }) {
           className="border border-gray-300 rounded px-2 py-2 text-sm resize-none"
         />
       </label>
-      <p className="text-[11px] text-gray-500">
+      <p className="text-xs text-gray-500">
         일반 서술형은 자동 채점이 없고 교사/AI가 전체 답을 직접 채점합니다.
       </p>
     </div>
@@ -523,8 +523,9 @@ function GeneralEssayAnswerInput({ q, update }) {
 }
 
 // ─── 서술형 정답·예시풀이·배점 입력 (교사용) ─────────────
-function EssayAnswerInput({ q, update }) {
-  const points = Math.max(1, q.points ?? 5)
+function EssayAnswerInput({ q, update, pointsPerQ }) {
+  // 배점 = 자동 계산값(100 ÷ 문항수). 폴백: q.points → 5
+  const points = Math.max(1, pointsPerQ || q.points || 5)
   const procDefault = Math.ceil(points * 0.6)
   const ansDefault = points - procDefault
   const procPts = q.process_points ?? procDefault
@@ -545,7 +546,7 @@ function EssayAnswerInput({ q, update }) {
     <div className="flex flex-col gap-3 border border-gray-200 rounded-lg p-3 bg-gray-50/50">
       {/* 답 부분 */}
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-gray-500">정답 (답 부분 · 자동 채점 대상)</span>
+        <span className="text-sm text-gray-500">정답 (답 부분 · 자동 채점 대상)</span>
         {subCount > 1 ? (
           <MultiTextAnswerInput
             value={q.correct_answer || ''}
@@ -557,23 +558,23 @@ function EssayAnswerInput({ q, update }) {
             value={q.correct_answer || ''}
             onChange={(e) => update({ correct_answer: e.target.value })}
             placeholder="예) 145"
-            className="border border-gray-300 rounded px-2 py-2 text-sm"
+            className="border border-gray-300 rounded px-3 py-3 text-3xl font-medium"
           />
         )}
         <div className="flex items-center gap-2 mt-1">
-          <span className="text-xs text-gray-500 shrink-0">단위</span>
+          <span className="text-sm text-gray-500 shrink-0">단위</span>
           <input
             value={q.answer_unit || ''}
             onChange={(e) => update({ answer_unit: e.target.value })}
             placeholder="예) °, cm (없으면 공백)"
-            className="w-40 border border-gray-300 rounded px-2 py-1.5 text-sm"
+            className="w-48 border border-gray-300 rounded px-3 py-2 text-2xl font-medium"
           />
         </div>
       </div>
 
       {/* 예시 풀이 */}
       <label className="flex flex-col gap-1">
-        <span className="text-xs text-gray-500">예시 풀이 (AI 채점 참고용)</span>
+        <span className="text-sm text-gray-500">예시 풀이 (AI 채점 참고용)</span>
         <textarea
           rows={3}
           value={q.example_solution || ''}
@@ -585,10 +586,10 @@ function EssayAnswerInput({ q, update }) {
 
       {/* 배점 분할 */}
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-gray-500">부분 배점 (과정 + 답 = 총점)</span>
+        <span className="text-sm text-gray-500">부분 배점 (과정 + 답 = 총점)</span>
         <div className="flex items-center gap-3 text-sm">
           <label className="flex items-center gap-1">
-            <span className="text-xs text-gray-500">과정</span>
+            <span className="text-sm text-gray-500">과정</span>
             <input
               type="number"
               min={0}
@@ -600,7 +601,7 @@ function EssayAnswerInput({ q, update }) {
           </label>
           <span className="text-gray-400">+</span>
           <label className="flex items-center gap-1">
-            <span className="text-xs text-gray-500">답</span>
+            <span className="text-sm text-gray-500">답</span>
             <input
               type="number"
               min={0}
@@ -610,7 +611,7 @@ function EssayAnswerInput({ q, update }) {
               className="w-14 border border-gray-300 rounded px-2 py-1 text-sm text-center"
             />
           </label>
-          <span className={`text-xs ${sum === points ? 'text-gray-400' : 'text-amber-600 font-semibold'}`}>
+          <span className={`text-sm ${sum === points ? 'text-gray-400' : 'text-amber-600 font-semibold'}`}>
             = {sum}점 / 총 {points}점
           </span>
         </div>
@@ -632,14 +633,14 @@ function MultiTextAnswerInput({ value, subCount, onChange }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs text-gray-500">정답</span>
+      <span className="text-sm text-gray-500">정답</span>
       {Array.from({ length: subCount }).map((_, idx) => (
         <div key={idx} className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 w-8 shrink-0">({idx + 1})</span>
+          <span className="text-sm text-gray-400 w-8 shrink-0">({idx + 1})</span>
           <input
             value={parts[idx] || ''}
             onChange={(e) => updatePart(idx, e.target.value)}
-            className="flex-1 border border-gray-300 rounded px-2 py-2 text-sm"
+            className="flex-1 border border-gray-300 rounded px-3 py-3 text-3xl font-medium"
           />
         </div>
       ))}
@@ -660,7 +661,7 @@ function FractionAnswerInput({ value, subCount, onChange }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs text-gray-500">정답 (분수)</span>
+      <span className="text-sm text-gray-500">정답 (분수)</span>
       {Array.from({ length: subCount }).map((_, idx) => (
         <FractionSingleInput
           key={idx}
@@ -694,12 +695,12 @@ function FractionSingleInput({ label, value, onChange }) {
 
   return (
     <div className="flex items-center gap-2">
-      {label && <span className="text-xs text-gray-400 w-6 shrink-0">{label}</span>}
+      {label && <span className="text-sm text-gray-400 w-6 shrink-0">{label}</span>}
       <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={() => toggleMixed(false)}
-          className={`px-2 py-1 rounded text-xs ${
+          className={`px-2 py-1 rounded text-sm ${
             !isMixed ? 'bg-teacher text-white' : 'bg-gray-100 text-gray-600'
           }`}
         >
@@ -708,7 +709,7 @@ function FractionSingleInput({ label, value, onChange }) {
         <button
           type="button"
           onClick={() => toggleMixed(true)}
-          className={`px-2 py-1 rounded text-xs ${
+          className={`px-2 py-1 rounded text-sm ${
             isMixed ? 'bg-teacher text-white' : 'bg-gray-100 text-gray-600'
           }`}
         >
@@ -721,7 +722,7 @@ function FractionSingleInput({ label, value, onChange }) {
           value={whole}
           onChange={(e) => setField({ whole: e.target.value })}
           placeholder="정수"
-          className="w-14 border border-gray-300 rounded px-2 py-1 text-sm text-center"
+          className="w-20 border border-gray-300 rounded px-2 py-2 text-3xl font-medium text-center"
         />
       )}
       <div className="inline-flex flex-col items-center">
@@ -730,15 +731,15 @@ function FractionSingleInput({ label, value, onChange }) {
           value={num}
           onChange={(e) => setField({ num: e.target.value })}
           placeholder="분자"
-          className="w-14 border border-gray-300 rounded px-2 py-1 text-sm text-center"
+          className="w-20 border border-gray-300 rounded px-2 py-2 text-3xl font-medium text-center"
         />
-        <div className="w-14 h-px bg-gray-400 my-0.5" />
+        <div className="w-20 h-px bg-gray-400 my-0.5" />
         <input
           type="number"
           value={den}
           onChange={(e) => setField({ den: e.target.value })}
           placeholder="분모"
-          className="w-14 border border-gray-300 rounded px-2 py-1 text-sm text-center"
+          className="w-20 border border-gray-300 rounded px-2 py-2 text-3xl font-medium text-center"
         />
       </div>
     </div>

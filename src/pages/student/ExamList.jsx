@@ -161,18 +161,22 @@ export default function ExamList() {
               {completed.map((e) => (
                 <li
                   key={e.id}
-                  className="rounded-xl bg-white/60 border border-gray-200 p-4 flex items-center gap-3 opacity-70"
+                  onClick={() => navigate(`/student/exams/${e.id}`)}
+                  className="rounded-xl bg-white border border-gray-200 p-4 flex items-center gap-3 cursor-pointer active:bg-gray-50 hover:border-student/40"
                 >
-                  <span className="w-12 h-12 rounded-lg bg-gray-100 text-gray-400 text-xl font-bold flex items-center justify-center">
+                  <span className="w-12 h-12 rounded-lg bg-gray-100 text-gray-500 text-xl font-bold flex items-center justify-center">
                     {(e.subject || '?').trim().charAt(0)}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-700 truncate">{e.subject}</p>
-                    <p className="text-sm text-gray-400 truncate">{e.unit}</p>
+                    <p className="font-semibold text-gray-800 truncate">{e.subject}</p>
+                    <p className="text-sm text-gray-500 truncate">{e.unit}</p>
                   </div>
-                  <span className="text-sm font-bold text-gray-500">
-                    {e.session_score ?? 0}/{e.session_max_score ?? 0}
-                  </span>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-gray-700">
+                      {e.session_score ?? 0}/{e.session_max_score ?? 0}
+                    </p>
+                    <p className="text-xs text-student">결과 보기 ›</p>
+                  </div>
                 </li>
               ))}
             </ul>

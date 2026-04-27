@@ -41,15 +41,15 @@ export default function PassageEditor({
           <span className="text-sm font-semibold text-gray-800 truncate">
             {makePassageTitle(p.questionNumbers)}
           </span>
-          <span className="text-xs text-gray-500 shrink-0">· p.{p.page}</span>
+          <span className="text-sm text-gray-500 shrink-0">· p.{p.page}</span>
         </div>
-        <span className="text-gray-400 text-xs shrink-0">{p.expanded ? '▲' : '▼'}</span>
+        <span className="text-gray-400 text-sm shrink-0">{p.expanded ? '▲' : '▼'}</span>
       </button>
 
       {p.expanded && (
         <div className="border-t border-amber-200/60 p-3 flex flex-col gap-3">
           {/* 페이지 선택 */}
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-sm">
             <span className="text-gray-500">페이지</span>
             <select
               value={p.page}
@@ -71,15 +71,15 @@ export default function PassageEditor({
             />
           ) : (
             <div className="rounded-lg border border-gray-200 bg-gray-50 min-h-[60px] flex items-center justify-center">
-              <span className="text-xs text-gray-400 py-6">이미지 없음</span>
+              <span className="text-sm text-gray-400 py-6">이미지 없음</span>
             </div>
           )}
 
           {/* 연결 문항 선택 */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs text-gray-500">연결 문항</span>
+            <span className="text-sm text-gray-500">연결 문항</span>
             {allNumbers.length === 0 ? (
-              <p className="text-xs text-gray-400">먼저 문항을 추가하세요.</p>
+              <p className="text-sm text-gray-400">먼저 문항을 추가하세요.</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {allNumbers.map((n) => {
@@ -89,7 +89,7 @@ export default function PassageEditor({
                       key={n}
                       type="button"
                       onClick={() => toggleNumber(n)}
-                      className={`min-w-[40px] px-2.5 py-1.5 rounded-lg text-xs font-bold border-2 transition-colors ${
+                      className={`min-w-[40px] px-2.5 py-1.5 rounded-lg text-sm font-bold border-2 transition-colors ${
                         on
                           ? 'bg-amber-500 text-white border-amber-500'
                           : 'bg-white text-gray-500 border-gray-200 hover:border-amber-300'
@@ -106,7 +106,7 @@ export default function PassageEditor({
           <button
             type="button"
             onClick={onDelete}
-            className="self-start text-xs text-red-500"
+            className="self-start text-sm text-red-500"
           >
             이 지문 삭제
           </button>

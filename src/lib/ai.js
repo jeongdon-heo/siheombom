@@ -214,6 +214,143 @@ async function analyzeWithClaude({ apiKey, exams, answers }) {
   return parseQuestionsJson(text)
 }
 
+// =============================================================
+// generateFeedback: 학생 시험 결과 → "선생님의 한 마디" 한 문단
+// =============================================================
+
+function buildFeedbackPrompt(summary) {
+  const stu = summary.student ?? {}
+  const ex = summary.exam ?? {}
+  const score = summary.score ?? 0
+  const maxScore = summary.maxScore ?? 0
+  const results = Array.isArray(summary.results) ? summary.results : []
+
+  const lines = results.map((r) => {
+    const flag =
+      r.isCorrect === true ? '맞음' : r.isCorrect === false ? '틀림' : '대기'
+    const ans = String(r.studentAnswer || '').slice(0, 100)
+    const lo = r.learningObjective ? ` [학습목표: ${r.learningObjective}]` : ''
+    return `  ${r.number}번: ${flag} (${r.earned ?? 0}/${r.points ?? 0}점) — 학생 답: "${ans}"${lo}`
+  })
+
+  return `초등학교 학생의 단원평가 결과입니다.
+
+학생: ${stu.number ?? ''}번 ${stu.name ?? ''}
+시험: ${ex.subject ?? ''} · ${ex.unit ?? ''}
+총점: ${score}/${maxScore}점 (${maxScore > 0 ? Math.round((score / maxScore) * 100) : 0}%)
+
+문항별 결과:
+${lines.join('\n')}
+
+위 결과를 바탕으로 두 가지 글을 작성해 주세요.
+
+[1] studentFeedback — 학생에게 직접 보여줄 "선생님의 한 마디"
+- 한 문단, 3~5문장
+- 따뜻하고 격려하는 톤. 막연한 칭찬은 피하고 구체적으로
+- 잘한 점(맞은 문항의 학습 목표) 한두 가지를 짚어주기
+- 부족한 점이 있다면 다음에 어떻게 보완하면 좋을지 한 가지만 짧게
+- 학생을 부르는 말투("○○야,"로 시작) 가능
+- 헤더 텍스트 없이 본문만
+
+[2] teacherAnalysis — 교사를 위한 상세 학습 분석
+- 다음 형식 그대로 사용 (이모지·줄바꿈·하이픈 유지)
+- 문항 번호 대신 학습 목표 이름을 주어로 사용
+- 학습 목표가 비어 있는 문항은 "기타" 카테고리로 묶거나 생략
+
+📊 전체 요약
+- 총점·정답률·전반적 수준 한 줄 요약
+
+✅ 잘한 영역
+- [학습목표명]: 구체적 설명
+- [학습목표명]: 구체적 설명
+
+⚠️ 보충이 필요한 영역
+- [학습목표명]: 어떤 부분이 부족하고, 어떤 유형의 실수를 했는지
+- [학습목표명]: 구체적 설명
+
+📝 지도 제안
+- 이 학생에게 추천하는 보충 학습 방향 2~3가지
+
+응답은 JSON으로만 (다른 텍스트·코드 블록 금지):
+{"studentFeedback": "...", "teacherAnalysis": "..."}`
+}
+
+function parseFeedback(text) {
+  const stripped = stripCodeFence(text)
+  const match = stripped.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('AI 응답을 파싱할 수 없습니다.')
+  const obj = JSON.parse(match[0])
+  if (typeof obj.studentFeedback !== 'string' || typeof obj.teacherAnalysis !== 'string') {
+    throw new Error('studentFeedback / teacherAnalysis 필드 누락')
+  }
+  return {
+    studentFeedback: obj.studentFeedback.trim(),
+    teacherAnalysis: obj.teacherAnalysis.trim(),
+  }
+}
+
+const FEEDBACK_SYSTEM =
+  '당신은 초등학교 담임 선생님으로, 학생의 단원평가 결과를 보고 학생용·교사용 두 가지 피드백을 작성합니다. 막연한 칭찬은 피하고 구체적인 학습 행동에 초점을 맞추세요.'
+
+export async function generateFeedback({ provider, apiKey, summary }) {
+  if (!apiKey) throw new Error('API 키가 설정되지 않았습니다. 설정에서 먼저 저장해주세요.')
+  if (!summary) throw new Error('summary 가 비어있습니다.')
+  if (provider === 'claude') return feedbackWithClaude({ apiKey, summary })
+  if (provider === 'gemini') return feedbackWithGemini({ apiKey, summary })
+  throw new Error(`알 수 없는 공급자: ${provider}`)
+}
+
+async function feedbackWithClaude({ apiKey, summary }) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: PROVIDERS.claude.model,
+      max_tokens: 2048,
+      system: FEEDBACK_SYSTEM,
+      messages: [
+        { role: 'user', content: buildFeedbackPrompt(summary) },
+      ],
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message || `Claude HTTP ${res.status}`)
+  }
+  const data = await res.json()
+  const text = data?.content?.map((c) => c.text ?? '').join('') ?? ''
+  return parseFeedback(text)
+}
+
+async function feedbackWithGemini({ apiKey, summary }) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${PROVIDERS.gemini.model}:generateContent?key=${encodeURIComponent(apiKey)}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: FEEDBACK_SYSTEM }] },
+      contents: [{ parts: [{ text: buildFeedbackPrompt(summary) }] }],
+      generationConfig: {
+        maxOutputTokens: 2048,
+        responseMimeType: 'application/json',
+      },
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message || `Gemini HTTP ${res.status}`)
+  }
+  const data = await res.json()
+  const text =
+    data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+  return parseFeedback(text)
+}
+
 // ---------- Gemini ----------
 async function analyzeWithGemini({ apiKey, exams, answers }) {
   const parts = []

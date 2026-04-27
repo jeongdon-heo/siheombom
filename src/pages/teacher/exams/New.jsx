@@ -603,7 +603,7 @@ export default function NewExam() {
             <button
               type="button"
               onClick={addBlankQuestion}
-              className="text-xs px-3 py-1.5 rounded-lg border border-teacher text-teacher"
+              className="text-sm px-3 py-1.5 rounded-lg border border-teacher text-teacher"
             >
               + 문항 추가
             </button>
@@ -613,7 +613,7 @@ export default function NewExam() {
           <section className="rounded-xl bg-amber-50/50 border border-amber-100 p-3 flex flex-col gap-2">
             <h3 className="text-sm font-bold text-gray-800">📖 지문 관리</h3>
             {passages.length === 0 ? (
-              <p className="text-xs text-gray-500">
+              <p className="text-sm text-gray-500">
                 국어처럼 여러 문항이 공통 지문을 쓰는 경우 우측 하단의 "지문 추가" 버튼으로 추가하세요. 없으면 건너뜀.
               </p>
             ) : (
@@ -639,6 +639,9 @@ export default function NewExam() {
               const samePage = sortedQuestions.filter((sq) => sq.page === q.page)
               const pageIdx = samePage.indexOf(q)
               const pageTotal = samePage.length
+              const pointsPerQ = sortedQuestions.length > 0
+                ? Math.floor(100 / sortedQuestions.length)
+                : 0
               return (
               <QuestionCard
                 key={q.id}
@@ -646,6 +649,7 @@ export default function NewExam() {
                 pageIdx={pageIdx >= 0 ? pageIdx : 0}
                 pageTotal={pageTotal}
                 pageCount={Math.max(examImages.length, 1)}
+                pointsPerQ={pointsPerQ}
                 examImages={examImages}
                 textLayerBboxMap={textLayerBboxMap}
                 textLayerPositions={textLayerPositions}
