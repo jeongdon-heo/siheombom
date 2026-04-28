@@ -6,6 +6,7 @@ const MENU = [
   { key: 'create', label: '시험 만들기', desc: 'PDF 업로드 → AI 분석', to: '/teacher/exams/new' },
   { key: 'manage', label: '시험 관리', desc: '시험 목록·삭제', to: '/teacher/exams' },
   { key: 'result', label: '결과 분석', desc: '학생별 응시 결과', to: '/teacher/results' },
+  { key: 'students', label: '학생 명단', desc: '번호·이름 등록·수정', to: '/teacher/students' },
   { key: 'settings', label: '설정', desc: 'AI · API 키 · 학급코드', to: '/teacher/settings' },
 ]
 

@@ -4,6 +4,7 @@ import TeacherLogin from './pages/teacher/Login.jsx'
 import TeacherSignup from './pages/teacher/Signup.jsx'
 import TeacherHome from './pages/teacher/Home.jsx'
 import TeacherSettings from './pages/teacher/Settings.jsx'
+import TeacherStudents from './pages/teacher/Students.jsx'
 import NewExam from './pages/teacher/exams/New.jsx'
 import ExamsList from './pages/teacher/exams/List.jsx'
 import ResultsList from './pages/teacher/exams/ResultsList.jsx'
@@ -56,6 +57,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <TeacherSettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher/students"
+            element={
+              <ProtectedRoute>
+                <TeacherStudents />
               </ProtectedRoute>
             }
           />
