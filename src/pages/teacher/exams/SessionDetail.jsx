@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase.js'
-import { generateFeedback as aiGenerateFeedback } from '../../../lib/ai.js'
+import {
+  generateFeedback as aiGenerateFeedback,
+  gradeAnswer as aiGradeAnswer,
+} from '../../../lib/ai.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 
 export default function SessionDetail({
@@ -72,16 +75,40 @@ export default function SessionDetail({
     }
   }
 
+  const gradeOne = async (number) => {
+    if (!teacher?.api_key_encrypted || !teacher?.provider) {
+      throw new Error('설정에서 AI 공급자와 API 키를 먼저 저장해주세요.')
+    }
+    const { data: q, error: qErr } = await supabase.rpc('get_question_for_ai_grading', {
+      session_id_in: sessionId,
+      question_number_in: number,
+    })
+    if (qErr) throw new Error(qErr.message)
+    if (!q) throw new Error('문항을 찾지 못했습니다.')
+
+    const { score, reasoning } = await aiGradeAnswer({
+      provider: teacher.provider,
+      apiKey: teacher.api_key_encrypted,
+      points: Number(q.points) || 0,
+      correctAnswer: q.correctAnswer || '',
+      studentAnswer: q.studentAnswer || '',
+      imageUrl: q.imageUrl || null,
+    })
+
+    const { error: saveErr } = await supabase.rpc('save_ai_suggestion', {
+      session_id_in: sessionId,
+      question_number_in: number,
+      ai_score_in: score,
+      ai_reasoning_in: reasoning,
+    })
+    if (saveErr) throw new Error(saveErr.message)
+  }
+
   const callAi = async (number) => {
     setAiBusyNumber(number)
     setError(null)
     try {
-      const { data: d, error: err } = await supabase.functions.invoke('grade-with-ai', {
-        body: { session_id: sessionId, question_number: number },
-      })
-      if (err) throw new Error(err.message || 'AI 호출 실패')
-      if (d?.error) throw new Error(`${d.error}${d.detail ? ` · ${d.detail}` : ''}`)
-      // DB는 edge function 내부에서 이미 업데이트됨 → 세션 리로드
+      await gradeOne(number)
       await load()
     } catch (e) {
       setError(e.message)
@@ -174,12 +201,7 @@ export default function SessionDetail({
         try {
           for (const n of pendingNumbers) {
             setAiBusyNumber(n)
-            const { data: d, error: err } = await supabase.functions.invoke(
-              'grade-with-ai',
-              { body: { session_id: sessionId, question_number: n } },
-            )
-            if (err) throw new Error(err.message || 'AI 호출 실패')
-            if (d?.error) throw new Error(`${n}번: ${d.error}`)
+            await gradeOne(n)
           }
           await load()
         } catch (e) {
@@ -387,7 +409,7 @@ function QuestionGradeCard({ r, saving, aiBusy, onSaveScore, onRequestAi }) {
         </span>
       </div>
 
-      <div className="text-xs text-gray-700 pl-9 flex flex-col gap-0.5">
+      <div className="text-2xl text-gray-700 pl-9 flex flex-col gap-1">
         <p>학생 답: <span className="font-medium whitespace-pre-wrap">{r.studentAnswer || '(미작성)'}</span></p>
         <p className="text-gray-500">정답: {r.correctAnswer || '(없음)'}</p>
       </div>

@@ -351,6 +351,159 @@ async function feedbackWithGemini({ apiKey, summary }) {
   return parseFeedback(text)
 }
 
+// =============================================================
+// gradeAnswer: 단일 서술형 문항 채점 제안 (브라우저 직접 호출)
+// =============================================================
+
+async function fetchImageAsDataUrl(url) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`이미지 로드 실패 (HTTP ${res.status})`)
+  const blob = await res.blob()
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('이미지 변환 실패'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+function stripExamplePrefix(s) {
+  return (s || '').replace(/^\s*\(예\)\s*/, '').trim()
+}
+
+function buildGradePrompt({ points, correctAnswer, studentAnswer }) {
+  return `다음은 초등학교 단원평가 서술형 문제입니다.
+배점: ${points}점
+
+예시 정답: ${correctAnswer || '(없음)'}
+학생 답안: ${studentAnswer || '(미작성)'}
+
+이 학생의 답안을 채점해 주세요.
+- 풀이 과정과 최종 답이 정답과 본질적으로 같으면 만점
+- 핵심 개념은 맞지만 계산이나 표현이 부분적으로 틀리면 부분 점수
+- 전혀 다르거나 무응답이면 0점
+- 한국어로 간결하게 이유를 적어주세요
+
+JSON으로만 응답하세요 (다른 텍스트·코드 블록 금지):
+{"score": <0~${points}>, "max_score": ${points}, "reasoning": "...", "is_correct": true|false}`
+}
+
+const GRADE_SYSTEM =
+  '당신은 초등학교 단원평가 서술형 문항을 공정하고 일관되게 채점하는 조력자입니다. 최종 판정은 교사가 하므로, 명확한 근거와 함께 제안 점수를 제시하세요.'
+
+function parseGradeJson(text, points) {
+  const stripped = stripCodeFence(text)
+  const match = stripped.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('AI 응답을 파싱할 수 없습니다.')
+  const obj = JSON.parse(match[0])
+  if (typeof obj.score !== 'number') throw new Error('score 필드 누락')
+  const score = Math.max(0, Math.min(points, Math.round(obj.score)))
+  return {
+    score,
+    reasoning: String(obj.reasoning ?? ''),
+    isCorrect: Boolean(obj.is_correct),
+  }
+}
+
+export async function gradeAnswer({
+  provider,
+  apiKey,
+  points,
+  correctAnswer,
+  studentAnswer,
+  imageUrl,
+}) {
+  if (!apiKey) throw new Error('API 키가 설정되지 않았습니다. 설정에서 먼저 저장해주세요.')
+  const args = {
+    apiKey,
+    points,
+    correctAnswer: stripExamplePrefix(correctAnswer),
+    studentAnswer: studentAnswer || '',
+    imageUrl: imageUrl || null,
+  }
+  if (provider === 'claude') return gradeWithClaude(args)
+  if (provider === 'gemini') return gradeWithGemini(args)
+  throw new Error(`알 수 없는 공급자: ${provider}`)
+}
+
+async function gradeWithClaude({ apiKey, points, correctAnswer, studentAnswer, imageUrl }) {
+  const content = []
+  if (imageUrl) {
+    const dataUrl = await fetchImageAsDataUrl(imageUrl)
+    content.push({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: dataUrlMediaType(dataUrl),
+        data: dataUrlToBase64(dataUrl),
+      },
+    })
+  }
+  content.push({
+    type: 'text',
+    text: buildGradePrompt({ points, correctAnswer, studentAnswer }),
+  })
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: PROVIDERS.claude.model,
+      max_tokens: 512,
+      system: GRADE_SYSTEM,
+      messages: [{ role: 'user', content }],
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message || `Claude HTTP ${res.status}`)
+  }
+  const data = await res.json()
+  const text = data?.content?.map((c) => c.text ?? '').join('') ?? ''
+  return parseGradeJson(text, points)
+}
+
+async function gradeWithGemini({ apiKey, points, correctAnswer, studentAnswer, imageUrl }) {
+  const parts = []
+  if (imageUrl) {
+    const dataUrl = await fetchImageAsDataUrl(imageUrl)
+    parts.push({
+      inlineData: {
+        mimeType: dataUrlMediaType(dataUrl),
+        data: dataUrlToBase64(dataUrl),
+      },
+    })
+  }
+  parts.push({ text: buildGradePrompt({ points, correctAnswer, studentAnswer }) })
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${PROVIDERS.gemini.model}:generateContent?key=${encodeURIComponent(apiKey)}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: GRADE_SYSTEM }] },
+      contents: [{ parts }],
+      generationConfig: {
+        maxOutputTokens: 1024,
+        responseMimeType: 'application/json',
+      },
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message || `Gemini HTTP ${res.status}`)
+  }
+  const data = await res.json()
+  const text =
+    data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+  return parseGradeJson(text, points)
+}
+
 // ---------- Gemini ----------
 async function analyzeWithGemini({ apiKey, exams, answers }) {
   const parts = []
