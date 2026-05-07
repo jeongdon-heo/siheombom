@@ -111,38 +111,52 @@ export default function StudentHistory() {
                   h.submitted && h.max_score > 0
                     ? Math.round((h.score / h.max_score) * 100)
                     : null
+                const hasFeedback =
+                  h.ai_feedback && String(h.ai_feedback).trim() !== ''
                 return (
                   <Link
                     key={h.session_id}
                     to={`/teacher/results/${h.exam_id}/${studentId}`}
-                    className={`rounded-xl border p-3 flex items-center gap-3 hover:border-teacher ${
+                    className={`rounded-xl border p-3 hover:border-teacher block ${
                       isPending ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200'
                     }`}
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">
-                        {h.subject} · {h.unit}
-                      </p>
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        {formatDate(h.exam_created_at)}
-                        {' · '}
-                        {h.submitted ? (
-                          isPending ? (
-                            <span className="text-amber-700 font-semibold">
-                              채점 대기 {h.pending_count}문항
-                            </span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 truncate">
+                          {h.subject} · {h.unit}
+                        </p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {formatDate(h.exam_created_at)}
+                          {' · '}
+                          {h.submitted ? (
+                            isPending ? (
+                              <span className="text-amber-700 font-semibold">
+                                채점 대기 {h.pending_count}문항
+                              </span>
+                            ) : (
+                              <>
+                                {h.score ?? 0}/{h.max_score ?? 0}점
+                                {pct != null && ` · ${pct}%`}
+                              </>
+                            )
                           ) : (
-                            <>
-                              {h.score ?? 0}/{h.max_score ?? 0}점
-                              {pct != null && ` · ${pct}%`}
-                            </>
-                          )
-                        ) : (
-                          <span className="text-gray-400">미제출</span>
-                        )}
-                      </p>
+                            <span className="text-gray-400">미제출</span>
+                          )}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-gray-300 text-sm">›</span>
                     </div>
-                    <span className="shrink-0 text-gray-300 text-sm">›</span>
+                    {hasFeedback && (
+                      <div className="mt-2 pt-2 border-t border-gray-100">
+                        <p className="text-[11px] font-bold text-teacher mb-1">
+                          💬 AI 코멘트
+                        </p>
+                        <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                          {h.ai_feedback}
+                        </p>
+                      </div>
+                    )}
                   </Link>
                 )
               })}
