@@ -178,17 +178,6 @@ export default function BboxEditor({ pageDataUrl, bbox, onChange }) {
     [containerSize],
   )
 
-  // ─── 디버그 로그 (값 변경 시에만) ───
-  useEffect(() => {
-    console.log('[BboxEditor]', {
-      imgLoaded,
-      containerSize: containerSize
-        ? `${Math.round(containerSize.width)}×${Math.round(containerSize.height)}`
-        : null,
-      bbox: `(${bbox.x},${bbox.y}) ${bbox.w}×${bbox.h}`,
-    })
-  }, [bboxKey, imgLoaded, containerSize]) // eslint-disable-line react-hooks/exhaustive-deps
-
   if (!pageDataUrl) return null
 
   // 로딩 중

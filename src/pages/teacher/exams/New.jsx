@@ -87,7 +87,6 @@ export default function NewExam() {
         setTextLayerPositions(positions)
         if (positions.length > 0) {
           bboxMap = computeBboxesFromTextLayer(positions)
-          console.log('[textLayer] 감지된 문항:', [...bboxMap.keys()])
         }
       } catch (e) {
         console.warn('텍스트 레이어 추출 실패 (스캔본일 수 있음):', e)
@@ -283,20 +282,6 @@ export default function NewExam() {
     let createdExamId = null
     const uploadedPaths = []
     try {
-      // ── DIAG: 업로드 직전에 실제 auth 상태를 찍는다 ──
-      // teacher.id === session.user.id === whoami().uid 여야 Storage RLS 통과
-      const { data: authUser } = await supabase.auth.getUser()
-      const { data: who, error: whoErr } = await supabase.rpc('whoami')
-      console.log('[saveExam DIAG]', {
-        'teacher.id': teacher?.id,
-        'session.user.id': session?.user?.id,
-        'supabase.auth.getUser().id': authUser?.user?.id,
-        'whoami() (PG 가 보는 값)': who,
-        'whoami rpc error': whoErr,
-        'access_token 존재?': Boolean(session?.access_token),
-        'uploadPath prefix': `${teacher?.id}/`,
-      })
-
       // [1/3] exams insert
       const { data: exam, error: e1 } = await supabase
         .from('exams')

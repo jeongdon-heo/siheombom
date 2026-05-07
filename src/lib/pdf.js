@@ -157,11 +157,6 @@ function deduplicatePositions(raw) {
     const pool = confidents.length > 0 ? confidents : candidates
     pool.sort((a, b) => columnStartDist(a.xPct) - columnStartDist(b.xPct))
     const winner = pool[0]
-    if (candidates.length > 1) {
-      console.log(
-        `[PDF Text] 번호 ${num}: ${candidates.length}개 후보 → 선택: page${winner.page} x=${winner.xPct.toFixed(1)}% y=${winner.yPct.toFixed(1)}% confident=${winner.confident}`,
-      )
-    }
     result.push(winner)
   }
   return result.sort((a, b) => a.number - b.number)
@@ -186,8 +181,6 @@ export async function extractTextPositions(source, opts = {}) {
     const vp = page.getViewport({ scale: 1 })
     const tc = await page.getTextContent()
 
-    console.log(`[PDF Text] page ${i}: viewport ${vp.width.toFixed(0)}×${vp.height.toFixed(0)}, items: ${tc.items.length}`)
-
     for (const item of tc.items) {
       const parsed = parseQuestionNumber(item.str)
       if (parsed == null || parsed.num < 1 || parsed.num > 50) continue
@@ -197,22 +190,10 @@ export async function extractTextPositions(source, opts = {}) {
       const xPct = (tx[4] / vp.width) * 100
       const yPct = (1 - tx[5] / vp.height) * 100
 
-      console.log(
-        `[PDF Text] page ${i}: "${item.str}" → ${parsed.num}번 (confident=${parsed.confident}) ` +
-        `at pdf(${tx[4].toFixed(1)}, ${tx[5].toFixed(1)}) → pct(x=${xPct.toFixed(1)}%, y=${yPct.toFixed(1)}%)`,
-      )
-
       // 헤더 영역 필터: 페이지 상단 N% 이내는 제목/학년/반 등이므로 제외
-      if (yPct < HEADER_ZONE_PCT) {
-        console.log(`  ↳ SKIP: 헤더 영역 (y=${yPct.toFixed(1)}% < ${HEADER_ZONE_PCT}%)`)
-        continue
-      }
-
+      if (yPct < HEADER_ZONE_PCT) continue
       // 페이지 하단 5% 이내도 페이지 번호 등이므로 제외
-      if (yPct > 95) {
-        console.log(`  ↳ SKIP: 푸터 영역 (y=${yPct.toFixed(1)}% > 95%)`)
-        continue
-      }
+      if (yPct > 95) continue
 
       raw.push({ page: i, number: parsed.num, xPct, yPct, confident: parsed.confident })
     }
@@ -223,11 +204,7 @@ export async function extractTextPositions(source, opts = {}) {
   await pdf.cleanup()
   await pdf.destroy()
 
-  const result = deduplicatePositions(raw)
-  console.log('[PDF Text] 최종 감지 결과:', result.map((r) =>
-    `${r.number}번: page${r.page} x=${r.xPct.toFixed(1)}% y=${r.yPct.toFixed(1)}% confident=${r.confident}`
-  ))
-  return result
+  return deduplicatePositions(raw)
 }
 
 /**

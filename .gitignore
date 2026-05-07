@@ -11,3 +11,9 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 *.log
+
+# Local Claude Code 설정 (사용자별)
+.claude/
+
+# 작업용 자료 (커밋 대상 아님)
+docs/
