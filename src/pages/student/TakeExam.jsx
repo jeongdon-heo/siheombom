@@ -409,6 +409,17 @@ export default function TakeExam() {
                         {!r.isCorrect && (
                           <p className="text-gray-500 mt-0.5">정답: {r.correctAnswer}</p>
                         )}
+                        {/* 교사 확정 후에만 AI 채점 설명 공개 (서술형 등) */}
+                        {r.aiReasoning && (
+                          <div className="mt-1.5 rounded-lg bg-white/70 border border-gray-200 p-2">
+                            <p className="text-[10px] font-bold text-student mb-0.5">
+                              🤖 AI 채점 설명
+                            </p>
+                            <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-wrap">
+                              {r.aiReasoning}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

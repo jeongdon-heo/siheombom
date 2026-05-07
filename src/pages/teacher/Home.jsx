@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
+import { supabase } from '../../lib/supabase.js'
+import ScoreTrendChart from '../../components/ScoreTrendChart.jsx'
 
 const MENU = [
   { key: 'create', label: '시험 만들기', desc: 'PDF 업로드 → AI 분석', to: '/teacher/exams/new' },
@@ -10,9 +12,112 @@ const MENU = [
   { key: 'settings', label: '설정', desc: 'AI · API 키 · 학급코드', to: '/teacher/settings' },
 ]
 
+const MAX_TREND_POINTS = 10
+
 export default function TeacherHome() {
   const { teacher, loading, signOut } = useAuth()
   const [copied, setCopied] = useState(false)
+  const [examStats, setExamStats] = useState([])
+  const [students, setStudents] = useState([])
+  const [selectedStudentId, setSelectedStudentId] = useState('')
+  const [studentHistory, setStudentHistory] = useState([])
+
+  // 성적 추이용 데이터 fetch — 시험 통계 + 학생 명단 동시
+  useEffect(() => {
+    if (!teacher) return
+    let mounted = true
+    ;(async () => {
+      const [statsRes, studentsRes] = await Promise.all([
+        supabase.rpc('list_teacher_exams_with_stats'),
+        supabase
+          .from('students')
+          .select('id, name, number')
+          .order('number', { ascending: true }),
+      ])
+      if (statsRes.error) {
+        console.error('[trend] stats failed', statsRes.error)
+      } else if (mounted) {
+        setExamStats(Array.isArray(statsRes.data) ? statsRes.data : [])
+      }
+      if (studentsRes.error) {
+        console.error('[trend] students failed', studentsRes.error)
+      } else if (mounted) {
+        setStudents(Array.isArray(studentsRes.data) ? studentsRes.data : [])
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [teacher])
+
+  // 학생 선택 시 해당 학생의 응시 기록 fetch
+  useEffect(() => {
+    if (!selectedStudentId) {
+      setStudentHistory([])
+      return
+    }
+    let mounted = true
+    ;(async () => {
+      const { data, error } = await supabase.rpc('list_student_history', {
+        student_id_in: selectedStudentId,
+      })
+      if (error) {
+        console.error('[trend] student history failed', error)
+        return
+      }
+      if (mounted) setStudentHistory(Array.isArray(data) ? data : [])
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [selectedStudentId])
+
+  // 응시자 있고 만점 정보 있는 시험만, 시간순 asc 최근 N회
+  // + 학생 선택 시 해당 시험의 학생 점수 join
+  const trendData = useMemo(() => {
+    const valid = examStats.filter(
+      (e) =>
+        Number(e.submitted_count ?? 0) > 0 &&
+        e.avg_score != null &&
+        Number(e.max_score_total ?? 0) > 0,
+    )
+    // 학생 응시 기록을 examId로 인덱싱 (submitted=true 만)
+    const studentByExam = new Map()
+    for (const h of studentHistory) {
+      if (!h.submitted) continue
+      studentByExam.set(h.exam_id, h)
+    }
+    // RPC는 created_at desc로 반환됨 → 최근 N회 추출 후 시간순 asc로 뒤집기
+    return valid
+      .slice(0, MAX_TREND_POINTS)
+      .reverse()
+      .map((e) => {
+        const avg = Number(e.avg_score)
+        const total = Number(e.max_score_total)
+        const sh = studentByExam.get(e.id)
+        const studentScore = sh?.score
+        const studentMax = sh?.max_score
+        const studentPct =
+          studentScore != null && studentMax != null && studentMax > 0
+            ? Math.round((studentScore / studentMax) * 100)
+            : null
+        return {
+          name: `${e.subject}·${e.unit}`,
+          examId: e.id,
+          pct: total > 0 ? Math.round((avg / total) * 100) : 0,
+          avg,
+          total,
+          studentPct,
+          studentScore: studentScore ?? null,
+          studentMax: studentMax ?? null,
+        }
+      })
+  }, [examStats, studentHistory])
+
+  const selectedStudent = useMemo(
+    () => students.find((s) => s.id === selectedStudentId) || null,
+    [students, selectedStudentId],
+  )
 
   if (loading) {
     return (
@@ -72,6 +177,33 @@ export default function TeacherHome() {
           칠판에 적어 학생들이 입력하게 하세요.
         </p>
       </section>
+
+      {trendData.length > 0 && students.length > 0 && (
+        <div className="flex items-center gap-2">
+          <label htmlFor="trend-student" className="text-xs text-gray-500 shrink-0">
+            학생 비교
+          </label>
+          <select
+            id="trend-student"
+            value={selectedStudentId}
+            onChange={(e) => setSelectedStudentId(e.target.value)}
+            className="flex-1 text-sm rounded-lg border border-gray-200 px-3 py-2 bg-white"
+          >
+            <option value="">— 선택 안 함 (학급 평균만) —</option>
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.number ? `${s.number}번 ` : ''}
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <ScoreTrendChart
+        data={trendData}
+        studentName={selectedStudent ? selectedStudent.name : null}
+      />
 
       <section className="grid grid-cols-2 gap-3">
         {MENU.map((m) => {
