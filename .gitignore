@@ -17,3 +17,5 @@ dist-ssr
 
 # 작업용 자료 (커밋 대상 아님)
 docs/
+
+.vercel
