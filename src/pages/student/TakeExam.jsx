@@ -372,64 +372,22 @@ export default function TakeExam() {
           {/* 문항별 정오 목록 */}
           {items.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-bold text-gray-700">문항별 결과</h3>
-              {items.map((r) => (
-                <div
-                  key={r.questionId}
-                  className={`rounded-xl border p-3 flex items-start gap-3 ${
-                    r.isCorrect === true
-                      ? 'border-green-200 bg-green-50/50'
-                      : r.isCorrect === false
-                        ? 'border-red-200 bg-red-50/50'
-                        : 'border-amber-200 bg-amber-50/50'
-                  }`}
-                >
-                  <span
-                    className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                      r.isCorrect === true
-                        ? 'bg-green-500 text-white'
-                        : r.isCorrect === false
-                          ? 'bg-red-500 text-white'
-                          : 'bg-amber-400 text-white'
-                    }`}
-                  >
-                    {r.isCorrect === true ? 'O' : r.isCorrect === false ? 'X' : '?'}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-bold text-gray-700">{r.number}번</span>
-                    {r.isCorrect === null ? (
-                      <p className="text-xs text-amber-600 mt-0.5">
-                        📝 선생님이 채점합니다
-                      </p>
-                    ) : (
-                      <div className="text-xs mt-0.5">
-                        <p className={r.isCorrect ? 'text-green-700' : 'text-red-600'}>
-                          내 답: {r.studentAnswer || '(미작성)'}
-                        </p>
-                        {!r.isCorrect && (
-                          <p className="text-gray-500 mt-0.5">정답: {r.correctAnswer}</p>
-                        )}
-                        {/* 교사 확정 후에만 AI 채점 설명 공개 (서술형 등) */}
-                        {r.aiReasoning && (
-                          <div className="mt-1.5 rounded-lg bg-white/70 border border-gray-200 p-2">
-                            <p className="text-[10px] font-bold text-student mb-0.5">
-                              🤖 AI 채점 설명
-                            </p>
-                            <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-wrap">
-                              {r.aiReasoning}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <span className={`text-xs font-bold shrink-0 ${
-                    r.isCorrect === true ? 'text-green-600' : 'text-gray-400'
-                  }`}>
-                    {r.isCorrect === true ? `+${r.earned}` : r.isCorrect === false ? '0' : '-'}점
-                  </span>
-                </div>
-              ))}
+              <h3 className="text-sm font-bold text-gray-700">
+                문항별 결과
+                <span className="ml-1.5 text-[11px] font-normal text-gray-400">
+                  (문항을 누르면 문제가 펼쳐져요)
+                </span>
+              </h3>
+              {items.map((r) => {
+                const q = questions.find((x) => x.id === r.questionId)
+                return (
+                  <ResultItemRow
+                    key={r.questionId}
+                    r={r}
+                    imageUrl={q?.image_url || null}
+                  />
+                )
+              })}
             </div>
           )}
         </div>
@@ -1021,6 +979,100 @@ function AnswerInput({ question, value, onChange }) {
         autoComplete="off"
         className="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-center text-lg font-medium focus:outline-none focus:border-student"
       />
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════
+//  결과 카드: 클릭 시 문제 이미지 펼침/접힘
+// ═══════════════════════════════════════════
+
+function ResultItemRow({ r, imageUrl }) {
+  // 틀린 문항은 기본 펼침 (원인 파악 도움), 맞음/대기는 접힘
+  const [imgOpen, setImgOpen] = useState(r.isCorrect === false)
+  const hasImage = !!imageUrl
+
+  const cardBg =
+    r.isCorrect === true
+      ? 'border-green-200 bg-green-50/50'
+      : r.isCorrect === false
+        ? 'border-red-200 bg-red-50/50'
+        : 'border-amber-200 bg-amber-50/50'
+
+  const badgeBg =
+    r.isCorrect === true
+      ? 'bg-green-500 text-white'
+      : r.isCorrect === false
+        ? 'bg-red-500 text-white'
+        : 'bg-amber-400 text-white'
+
+  return (
+    <div className={`rounded-xl border ${cardBg}`}>
+      <button
+        type="button"
+        onClick={() => hasImage && setImgOpen((v) => !v)}
+        disabled={!hasImage}
+        className={`w-full p-3 flex items-start gap-3 text-left rounded-xl ${
+          hasImage ? 'hover:bg-black/5 cursor-pointer' : 'cursor-default'
+        }`}
+        title={hasImage ? '눌러서 문제 이미지 보기' : undefined}
+      >
+        <span
+          className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${badgeBg}`}
+        >
+          {r.isCorrect === true ? 'O' : r.isCorrect === false ? 'X' : '?'}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-bold text-gray-700">{r.number}번</span>
+            {hasImage && (
+              <span className="text-[10px] text-gray-400">
+                {imgOpen ? '▲ 접기' : '▼ 문제 보기'}
+              </span>
+            )}
+          </div>
+          {r.isCorrect === null ? (
+            <p className="text-xs text-amber-600 mt-0.5">📝 선생님이 채점합니다</p>
+          ) : (
+            <div className="text-xs mt-0.5">
+              <p className={r.isCorrect ? 'text-green-700' : 'text-red-600'}>
+                내 답: {r.studentAnswer || '(미작성)'}
+              </p>
+              {!r.isCorrect && (
+                <p className="text-gray-500 mt-0.5">정답: {r.correctAnswer}</p>
+              )}
+              {/* 교사 확정 후에만 AI 채점 설명 공개 (서술형 등) */}
+              {r.aiReasoning && (
+                <div className="mt-1.5 rounded-lg bg-white/70 border border-gray-200 p-2">
+                  <p className="text-[10px] font-bold text-student mb-0.5">
+                    🤖 AI 채점 설명
+                  </p>
+                  <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-wrap">
+                    {r.aiReasoning}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <span
+          className={`text-xs font-bold shrink-0 ${
+            r.isCorrect === true ? 'text-green-600' : 'text-gray-400'
+          }`}
+        >
+          {r.isCorrect === true ? `+${r.earned}` : r.isCorrect === false ? '0' : '-'}점
+        </span>
+      </button>
+
+      {hasImage && imgOpen && (
+        <div className="border-t border-gray-200 bg-white rounded-b-xl overflow-hidden">
+          <img
+            src={imageUrl}
+            alt={`${r.number}번 문제`}
+            className="w-full h-auto block"
+          />
+        </div>
+      )}
     </div>
   )
 }
