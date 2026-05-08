@@ -19,6 +19,7 @@ export default function SessionDetail({
   const backTo = backToProp ?? `/teacher/exams/${examId}/results`
   const backLabel = backLabelProp ?? '← 응시 목록'
   const [data, setData] = useState(null)
+  const [questionImages, setQuestionImages] = useState({}) // { [questionId]: image_url }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [savingNumber, setSavingNumber] = useState(null)
@@ -37,6 +38,22 @@ export default function SessionDetail({
       })
       if (err) throw new Error(err.message)
       setData(d)
+
+      // 문항 이미지를 별도로 로드 (results에는 imageUrl이 없음)
+      const targetExamId = d?.exam?.id
+      if (targetExamId) {
+        const { data: qs, error: qErr } = await supabase
+          .from('questions')
+          .select('id, image_url')
+          .eq('exam_id', targetExamId)
+        if (!qErr && Array.isArray(qs)) {
+          const map = {}
+          for (const q of qs) {
+            if (q?.id) map[q.id] = q.image_url || null
+          }
+          setQuestionImages(map)
+        }
+      }
     } catch (e) {
       setError(e.message)
     } finally {
@@ -308,6 +325,7 @@ export default function SessionDetail({
               <QuestionGradeCard
                 key={r.number}
                 r={r}
+                imageUrl={questionImages[r.questionId] || null}
                 saving={savingNumber === r.number}
                 aiBusy={aiBusyNumber === r.number}
                 onSaveScore={(fs) => saveScore(r.number, fs)}
@@ -324,6 +342,7 @@ export default function SessionDetail({
               <QuestionGradeCard
                 key={r.number}
                 r={r}
+                imageUrl={questionImages[r.questionId] || null}
                 saving={savingNumber === r.number}
                 aiBusy={aiBusyNumber === r.number}
                 onSaveScore={(fs) => saveScore(r.number, fs)}
@@ -361,7 +380,7 @@ export default function SessionDetail({
   )
 }
 
-function QuestionGradeCard({ r, saving, aiBusy, onSaveScore, onRequestAi }) {
+function QuestionGradeCard({ r, imageUrl, saving, aiBusy, onSaveScore, onRequestAi }) {
   const isPending = r.isCorrect === null || r.isCorrect === undefined
   const isAuto = r.autoGraded !== false
   const points = r.points ?? 0
@@ -373,6 +392,10 @@ function QuestionGradeCard({ r, saving, aiBusy, onSaveScore, onRequestAi }) {
         : r.isCorrect === false
           ? 0
           : null
+
+  // 틀린 문항은 기본 펼침 (원인 파악 도와주기), 그 외는 접힘
+  const [imgOpen, setImgOpen] = useState(r.isCorrect === false)
+  const hasImage = !!imageUrl
 
   const bg = isPending
     ? 'border-amber-300 bg-amber-50/60'
@@ -388,7 +411,15 @@ function QuestionGradeCard({ r, saving, aiBusy, onSaveScore, onRequestAi }) {
 
   return (
     <div className={`rounded-xl border p-3 flex flex-col gap-2 ${bg}`}>
-      <div className="flex items-center gap-2 flex-wrap">
+      <button
+        type="button"
+        onClick={() => hasImage && setImgOpen((v) => !v)}
+        disabled={!hasImage}
+        className={`flex items-center gap-2 flex-wrap text-left -m-1 p-1 rounded-lg ${
+          hasImage ? 'hover:bg-black/5 cursor-pointer' : 'cursor-default'
+        }`}
+        title={hasImage ? '클릭해서 문제 이미지 보기' : undefined}
+      >
         <span className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${badge.cls}`}>
           {badge.text}
         </span>
@@ -404,10 +435,25 @@ function QuestionGradeCard({ r, saving, aiBusy, onSaveScore, onRequestAi }) {
             수동 채점
           </span>
         )}
+        {hasImage && (
+          <span className="text-[10px] text-gray-400">
+            {imgOpen ? '▲ 문제 접기' : '▼ 문제 보기'}
+          </span>
+        )}
         <span className="ml-auto text-xs font-bold text-gray-500">
           +{typeof currentScore === 'number' ? currentScore : 0}점
         </span>
-      </div>
+      </button>
+
+      {hasImage && imgOpen && (
+        <div className="rounded-lg overflow-hidden border border-gray-200 bg-white">
+          <img
+            src={imageUrl}
+            alt={`${r.number}번 문제`}
+            className="w-full h-auto block"
+          />
+        </div>
+      )}
 
       <div className="text-2xl text-gray-700 pl-9 flex flex-col gap-1">
         <p>학생 답: <span className="font-medium whitespace-pre-wrap">{r.studentAnswer || '(미작성)'}</span></p>
