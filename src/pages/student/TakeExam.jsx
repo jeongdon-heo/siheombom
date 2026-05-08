@@ -320,7 +320,7 @@ export default function TakeExam() {
     return (
       <div className="min-h-full flex flex-col bg-student-bg">
         <header className="bg-white border-b border-gray-200 px-4 py-3 text-center">
-          <h2 className="text-lg font-bold text-gray-900">시험 결과</h2>
+          <h2 className="text-xl font-bold text-gray-900">시험 결과</h2>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
@@ -337,11 +337,11 @@ export default function TakeExam() {
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold text-gray-900">{result.score}</span>
-                <span className="text-xs text-gray-400">/ {result.maxScore}점</span>
+                <span className="text-3xl font-bold text-gray-900">{result.score}</span>
+                <span className="text-sm text-gray-400">/ {result.maxScore}점</span>
               </div>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-base text-gray-600">
               {student.name}
             </p>
           </div>
@@ -351,19 +351,19 @@ export default function TakeExam() {
 
           {/* 요약 카드 */}
           {items.length > 0 && (
-            <div className="flex gap-2 text-center text-sm">
-              <div className="flex-1 rounded-xl bg-green-50 border border-green-200 py-2">
-                <span className="text-lg font-bold text-green-600">{correctCount}</span>
-                <p className="text-xs text-green-600">맞음</p>
+            <div className="flex gap-2 text-center">
+              <div className="flex-1 rounded-xl bg-green-50 border border-green-200 py-2.5">
+                <span className="text-2xl font-bold text-green-600">{correctCount}</span>
+                <p className="text-sm text-green-600">맞음</p>
               </div>
-              <div className="flex-1 rounded-xl bg-red-50 border border-red-200 py-2">
-                <span className="text-lg font-bold text-red-500">{wrongCount}</span>
-                <p className="text-xs text-red-500">틀림</p>
+              <div className="flex-1 rounded-xl bg-red-50 border border-red-200 py-2.5">
+                <span className="text-2xl font-bold text-red-500">{wrongCount}</span>
+                <p className="text-sm text-red-500">틀림</p>
               </div>
               {essayCount > 0 && (
-                <div className="flex-1 rounded-xl bg-amber-50 border border-amber-200 py-2">
-                  <span className="text-lg font-bold text-amber-500">{essayCount}</span>
-                  <p className="text-xs text-amber-500">채점 대기</p>
+                <div className="flex-1 rounded-xl bg-amber-50 border border-amber-200 py-2.5">
+                  <span className="text-2xl font-bold text-amber-500">{essayCount}</span>
+                  <p className="text-sm text-amber-500">채점 대기</p>
                 </div>
               )}
             </div>
@@ -372,9 +372,9 @@ export default function TakeExam() {
           {/* 문항별 정오 목록 */}
           {items.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-bold text-gray-700">
+              <h3 className="text-base font-bold text-gray-700">
                 문항별 결과
-                <span className="ml-1.5 text-[11px] font-normal text-gray-400">
+                <span className="ml-1.5 text-xs font-normal text-gray-400">
                   (문항을 누르면 문제가 펼쳐져요)
                 </span>
               </h3>
@@ -1012,44 +1012,44 @@ function ResultItemRow({ r, imageUrl }) {
         type="button"
         onClick={() => hasImage && setImgOpen((v) => !v)}
         disabled={!hasImage}
-        className={`w-full p-3 flex items-start gap-3 text-left rounded-xl ${
+        className={`w-full p-3.5 flex items-start gap-3 text-left rounded-xl ${
           hasImage ? 'hover:bg-black/5 cursor-pointer' : 'cursor-default'
         }`}
         title={hasImage ? '눌러서 문제 이미지 보기' : undefined}
       >
         <span
-          className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${badgeBg}`}
+          className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${badgeBg}`}
         >
           {r.isCorrect === true ? 'O' : r.isCorrect === false ? 'X' : '?'}
         </span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-bold text-gray-700">{r.number}번</span>
+          <div className="flex items-center gap-2">
+            <span className="text-base font-bold text-gray-700">{r.number}번</span>
             {hasImage && (
-              <span className="text-[10px] text-gray-400">
+              <span className="text-xs text-gray-400">
                 {imgOpen ? '▲ 접기' : '▼ 문제 보기'}
               </span>
             )}
           </div>
           {r.isCorrect === null ? (
-            <p className="text-xs text-amber-600 mt-0.5">📝 선생님이 채점합니다</p>
+            <p className="text-sm text-amber-600 mt-1">📝 선생님이 채점합니다</p>
           ) : (
             <div className="mt-1">
-              <p className={`text-sm ${r.isCorrect ? 'text-green-700' : 'text-red-600'}`}>
+              <p className={`text-base ${r.isCorrect ? 'text-green-700' : 'text-red-600'}`}>
                 내 답: <span className="font-semibold">{r.studentAnswer || '(미작성)'}</span>
               </p>
               {!r.isCorrect && (
-                <p className="text-sm text-gray-600 mt-0.5">
+                <p className="text-base text-gray-600 mt-0.5">
                   정답: <span className="font-semibold">{r.correctAnswer}</span>
                 </p>
               )}
               {/* 교사 확정 후에만 AI 채점 설명 공개 (서술형 등) */}
               {r.aiReasoning && (
-                <div className="mt-1.5 rounded-lg bg-white/70 border border-gray-200 p-2">
-                  <p className="text-[10px] font-bold text-student mb-0.5">
+                <div className="mt-2 rounded-lg bg-white/70 border border-gray-200 p-2.5">
+                  <p className="text-xs font-bold text-student mb-1">
                     🤖 AI 채점 설명
                   </p>
-                  <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
                     {r.aiReasoning}
                   </p>
                 </div>
@@ -1058,7 +1058,7 @@ function ResultItemRow({ r, imageUrl }) {
           )}
         </div>
         <span
-          className={`text-xs font-bold shrink-0 ${
+          className={`text-sm font-bold shrink-0 ${
             r.isCorrect === true ? 'text-green-600' : 'text-gray-400'
           }`}
         >
@@ -1093,15 +1093,15 @@ function FeedbackPanel({ feedback }) {
       }`}
     >
       <div className="flex items-center gap-2">
-        <span className="text-base">💌</span>
-        <h3 className="text-sm font-bold text-gray-800">선생님의 한 마디</h3>
+        <span className="text-lg">💌</span>
+        <h3 className="text-base font-bold text-gray-800">선생님의 한 마디</h3>
       </div>
       {feedback ? (
-        <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+        <p className="text-base text-gray-800 leading-relaxed whitespace-pre-wrap">
           {feedback}
         </p>
       ) : (
-        <p className="text-sm text-gray-500 leading-relaxed">
+        <p className="text-base text-gray-500 leading-relaxed">
           선생님이 확인 후 피드백을 작성해 주실 거예요.
         </p>
       )}
