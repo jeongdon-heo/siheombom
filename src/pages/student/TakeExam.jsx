@@ -1034,12 +1034,14 @@ function ResultItemRow({ r, imageUrl }) {
           {r.isCorrect === null ? (
             <p className="text-xs text-amber-600 mt-0.5">📝 선생님이 채점합니다</p>
           ) : (
-            <div className="text-xs mt-0.5">
-              <p className={r.isCorrect ? 'text-green-700' : 'text-red-600'}>
-                내 답: {r.studentAnswer || '(미작성)'}
+            <div className="mt-1">
+              <p className={`text-sm ${r.isCorrect ? 'text-green-700' : 'text-red-600'}`}>
+                내 답: <span className="font-semibold">{r.studentAnswer || '(미작성)'}</span>
               </p>
               {!r.isCorrect && (
-                <p className="text-gray-500 mt-0.5">정답: {r.correctAnswer}</p>
+                <p className="text-sm text-gray-600 mt-0.5">
+                  정답: <span className="font-semibold">{r.correctAnswer}</span>
+                </p>
               )}
               {/* 교사 확정 후에만 AI 채점 설명 공개 (서술형 등) */}
               {r.aiReasoning && (
